@@ -1,13 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, CheckCircle2, Download, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, DatabaseBackup, Download, Store, XCircle } from 'lucide-react'
 import { useState } from 'react'
+import { NavLink, Navigate, useParams } from 'react-router-dom'
 
 import { Pills } from '@/components/date-range'
 import { Switch } from '@/components/fields'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { api, download, patch, post } from '@/lib/api'
+import { ApiError, api, download, patch, post } from '@/lib/api'
 import { time } from '@/lib/format'
+import { cn } from '@/lib/utils'
 
 interface BackupState {
   enabled: boolean
@@ -44,11 +46,217 @@ function when(iso: string) {
 
 const hours = (h: number) => (h === 1 ? 'hour' : `${h} hours`)
 
+// Each entry is one tab on the left; add a section here and it gets a tab and a URL.
+const SECTIONS = [
+  { path: 'restaurant', label: 'Restaurant details', icon: Store, page: RestaurantSettings },
+  { path: 'backup', label: 'Backup', icon: DatabaseBackup, page: BackupSettings },
+] as const
+
 export function SettingsPage() {
+  const { section } = useParams()
+  const current = SECTIONS.find((s) => s.path === section)
+  if (!current) return <Navigate to={`/settings/${SECTIONS[0].path}`} replace />
+  const Page = current.page
+
   return (
-    <div className="mx-auto grid max-w-3xl gap-6">
-      <h1 className="text-lg font-semibold tracking-tight">Settings</h1>
-      <BackupSettings />
+    <div className="grid gap-6 md:grid-cols-[13rem_minmax(0,1fr)] md:items-start lg:gap-10">
+      <aside className="grid gap-3 md:sticky md:top-20">
+        <h1 className="text-lg font-semibold tracking-tight">Settings</h1>
+        <nav className="flex gap-1 overflow-x-auto md:flex-col">
+          {SECTIONS.map(({ path, label, icon: Icon }) => (
+            <NavLink
+              key={path}
+              to={`/settings/${path}`}
+              className={({ isActive }) =>
+                cn(
+                  'flex h-9 shrink-0 items-center gap-2 rounded-lg px-3 text-sm transition-colors',
+                  isActive
+                    ? 'bg-muted font-medium text-foreground'
+                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                )
+              }
+            >
+              <Icon className="size-4" />
+              {label}
+            </NavLink>
+          ))}
+        </nav>
+      </aside>
+      <div className="grid min-w-0 gap-6">
+        <Page />
+      </div>
+    </div>
+  )
+}
+
+// ---------- restaurant details ----------
+
+interface Restaurant {
+  name: string
+  legal_name: string
+  address_line1: string
+  address_line2: string
+  city: string
+  state: string
+  pincode: string
+  phone: string
+  email: string
+  gstin: string
+  fssai: string
+  bill_footer: string
+}
+
+const STATES = [
+  'Andaman and Nicobar Islands', 'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar',
+  'Chandigarh', 'Chhattisgarh', 'Dadra and Nagar Haveli and Daman and Diu', 'Delhi', 'Goa',
+  'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jammu and Kashmir', 'Jharkhand', 'Karnataka',
+  'Kerala', 'Ladakh', 'Lakshadweep', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya',
+  'Mizoram', 'Nagaland', 'Odisha', 'Puducherry', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu',
+  'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
+]
+
+function RestaurantSettings() {
+  const queryClient = useQueryClient()
+  const saved = useQuery({
+    queryKey: ['settings', 'restaurant'],
+    queryFn: () => api<Restaurant>('/settings/restaurant/'),
+  })
+  const [draft, setDraft] = useState<Restaurant | null>(null)
+  const [done, setDone] = useState(false)
+  const save = useMutation({
+    mutationFn: (body: Restaurant) => patch<Restaurant>('/settings/restaurant/', body),
+    onSuccess: (fresh) => {
+      queryClient.setQueryData(['settings', 'restaurant'], fresh)
+      setDraft(null)
+      setDone(true)
+    },
+  })
+
+  if (saved.isPending) return <Section title="Restaurant details"><p className="text-sm text-muted-foreground">Loading…</p></Section>
+  if (saved.isError) return <Section title="Restaurant details"><p className="text-sm text-destructive">{saved.error.message}</p></Section>
+
+  const value = draft ?? saved.data
+  const dirty = draft !== null && JSON.stringify(draft) !== JSON.stringify(saved.data)
+  const errors = (save.error instanceof ApiError && typeof save.error.data === 'object' ? save.error.data : {}) as Record<string, string[]>
+  const set = (field: keyof Restaurant) => (e: { target: { value: string } }) => {
+    setDraft({ ...value, [field]: e.target.value })
+    setDone(false)
+  }
+  const field = (name: keyof Restaurant, label: string, props: React.ComponentProps<'input'> & { hint?: string } = {}) => {
+    const { hint, ...rest } = props
+    return (
+      <label className={cn('grid content-start gap-1.5', rest.className)}>
+        <span className="text-sm font-medium">{label}</span>
+        <Input value={value[name]} onChange={set(name)} aria-invalid={!!errors[name]} {...rest} className={undefined} />
+        {errors[name] ? (
+          <span className="text-xs text-destructive">{errors[name][0]}</span>
+        ) : (
+          hint && <span className="text-xs text-muted-foreground">{hint}</span>
+        )}
+      </label>
+    )
+  }
+
+  return (
+    <form
+      className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]"
+      onSubmit={(e) => {
+        e.preventDefault()
+        save.mutate(value)
+      }}
+    >
+      <div className="grid gap-6">
+      <Section title="Restaurant" description="Printed at the top of every bill.">
+        <div className="grid gap-4 sm:grid-cols-2">
+          {field('name', 'Restaurant name', { required: true, maxLength: 120 })}
+          {field('legal_name', 'Legal / registered name', { maxLength: 120, hint: 'If different, e.g. “A unit of … Pvt Ltd”.' })}
+        </div>
+      </Section>
+
+      <Section title="Address and contact">
+        <div className="grid gap-4 sm:grid-cols-2">
+          {field('address_line1', 'Address line 1', { maxLength: 120, className: 'sm:col-span-2' })}
+          {field('address_line2', 'Address line 2', { maxLength: 120, className: 'sm:col-span-2' })}
+          {field('city', 'City', { maxLength: 80 })}
+          {field('state', 'State', { maxLength: 60, list: 'indian-states' })}
+          {field('pincode', 'PIN code', { inputMode: 'numeric', maxLength: 6 })}
+          {field('phone', 'Phone', { type: 'tel', maxLength: 40 })}
+          {field('email', 'Email', { type: 'email', className: 'sm:col-span-2' })}
+        </div>
+        <datalist id="indian-states">
+          {STATES.map((s) => (
+            <option key={s} value={s} />
+          ))}
+        </datalist>
+      </Section>
+
+      <Section title="Registration" description="Shown on the bill when filled in.">
+        <div className="grid gap-4 sm:grid-cols-2">
+          {field('gstin', 'GSTIN', { maxLength: 20, placeholder: '27ABCDE1234F1Z5', hint: '15 characters.' })}
+          {field('fssai', 'FSSAI licence number', { inputMode: 'numeric', maxLength: 20, hint: '14 digits.' })}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          The POS doesn’t calculate GST: bills show the GSTIN but no tax lines.
+        </p>
+      </Section>
+
+      <Section title="Bill footer">
+        {field('bill_footer', 'Message at the bottom of the bill', { maxLength: 120, placeholder: 'Thank You. Visit Again.', hint: 'Leave empty for none.' })}
+      </Section>
+
+
+        <div className="sticky bottom-0 flex items-center justify-end gap-3 rounded-2xl border bg-background/95 px-4 py-3 shadow-sm">
+          {done && !dirty && (
+            <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <CheckCircle2 className="size-4 text-emerald-600" /> Saved
+            </span>
+          )}
+          {save.error && !(save.error instanceof ApiError && save.error.status === 400) && (
+            <span className="text-sm text-destructive">{save.error.message}</span>
+          )}
+          {dirty && (
+            <Button type="button" variant="ghost" size="lg" onClick={() => { setDraft(null); save.reset() }}>
+              Discard
+            </Button>
+          )}
+          <Button type="submit" size="lg" disabled={!dirty || save.isPending}>
+            {save.isPending ? 'Saving…' : 'Save changes'}
+          </Button>
+        </div>
+      </div>
+
+      <aside className="grid gap-3 xl:sticky xl:top-20">
+        <h2 className="text-sm font-medium">Bill preview</h2>
+        <BillPreview r={value} />
+        <p className="text-center text-xs text-muted-foreground">How the top and bottom of a printed bill will read.</p>
+      </aside>
+    </form>
+  )
+}
+
+/** Roughly what the thermal printer prints (services.company_data + ticket.build_bill). */
+function BillPreview({ r }: { r: Restaurant }) {
+  const cityLine = [[r.city, r.pincode].filter(Boolean).join(' '), r.state].filter(Boolean).join(', ')
+  const lines = [
+    r.legal_name,
+    r.address_line1,
+    r.address_line2,
+    cityLine,
+    r.phone && `Phone: ${r.phone}`,
+    r.email,
+    r.gstin && `GSTIN: ${r.gstin.replace(/\s/g, '').toUpperCase()}`,
+    r.fssai && `FSSAI Lic. No: ${r.fssai.replace(/\s/g, '')}`,
+  ].filter(Boolean)
+  return (
+    <div className="mx-auto w-full max-w-xs rounded-lg border bg-white p-4 text-center font-mono text-xs leading-relaxed text-neutral-900 shadow-sm">
+      <div className="text-sm font-bold">{r.name || 'Restaurant'}</div>
+      {lines.map((l, i) => (
+        <div key={i}>{l}</div>
+      ))}
+      <div className="my-2 border-t border-dashed border-neutral-400" />
+      <div className="text-neutral-400">… items and totals …</div>
+      <div className="my-2 border-t border-dashed border-neutral-400" />
+      {r.bill_footer && <div>{r.bill_footer}</div>}
     </div>
   )
 }
@@ -83,7 +291,7 @@ function BackupSettings() {
   const s = state.data
 
   return (
-    <>
+    <div className="grid items-start gap-6 2xl:grid-cols-2">
       <Section
         title="Automatic backups"
         description="The server saves a full backup on a schedule and deletes old ones."
@@ -198,7 +406,7 @@ function BackupSettings() {
           </p>
         </details>
       </Section>
-    </>
+    </div>
   )
 }
 
@@ -314,7 +522,7 @@ function Section(props: {
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="grid gap-1">
           <h2 className="font-medium">{props.title}</h2>
-          {props.description && <p className="text-sm break-all text-muted-foreground">{props.description}</p>}
+          {props.description && <p className="text-sm [overflow-wrap:anywhere] text-muted-foreground">{props.description}</p>}
         </div>
         {props.action}
       </header>

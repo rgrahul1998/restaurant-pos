@@ -109,93 +109,138 @@ export function OrderPage() {
     ])
   }
 
-  return (
-    <div
-      className={cn(
-        'grid grid-cols-[minmax(0,1fr)] items-start gap-6',
-        status === 'open' ? 'lg:grid-cols-[minmax(0,1fr)_24rem]' : 'mx-auto max-w-md',
-      )}
-    >
-      {status === 'open' && <MenuPicker items={items} onAdd={add} busy={run.isPending} />}
-
-      <aside className="grid gap-5 lg:sticky lg:top-20 rounded-2xl border bg-background p-5">
-        <header className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
-            {current?.customer_name && (
-              // A reservation's party (or any named customer), so staff know whose table it is.
-              <p className="mt-0.5 truncate text-sm font-medium">
-                {current.customer_name}
-                <span className="font-normal text-muted-foreground">
-                  {' · '}
-                  {current.guests} {current.guests === 1 ? 'guest' : 'guests'}
-                </span>
-              </p>
-            )}
-            <p className="text-sm text-muted-foreground">
-              {current ? `Order #${current.id} · ${current.waiter_name}` : 'New order'}
+  const summary = (
+    <>
+      <header className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+          {current?.customer_name && (
+            // A reservation's party (or any named customer), so staff know whose table it is.
+            <p className="mt-0.5 truncate text-sm font-medium">
+              {current.customer_name}
+              <span className="font-normal text-muted-foreground">
+                {' · '}
+                {current.guests} {current.guests === 1 ? 'guest' : 'guests'}
+              </span>
             </p>
-          </div>
-          {status !== 'open' && (
-            <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium capitalize">
-              {status}
-            </span>
           )}
-        </header>
+          <p className="text-sm text-muted-foreground">
+            {current ? `Order #${current.id} · ${current.waiter_name}` : 'New order'}
+          </p>
+        </div>
+        {status !== 'open' && (
+          <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium capitalize">
+            {status}
+          </span>
+        )}
+      </header>
 
-        <Lines
-          items={items}
-          editable={status === 'open'}
+      <Lines
+        items={items}
+        editable={status === 'open'}
+        busy={run.isPending}
+        mayCancelSent={canCancelSent(role)}
+        onChange={change}
+      />
+
+      {current && <Totals order={current} />}
+    </>
+  )
+
+  const actions = (
+    <>
+      {error && <p className="text-sm text-destructive">{error}</p>}
+
+      {status === 'open' && current && (
+        <OpenActions
+          order={current}
           busy={run.isPending}
-          mayCancelSent={canCancelSent(role)}
-          onChange={change}
+          mayBill={canBill(role)}
+          onFire={() => act('fire')}
+          onBill={(discount, discount_type) => act('bill', { discount, discount_type })}
+          onCancel={() => window.confirm('Cancel this whole order?') && act('cancel')}
         />
+      )}
+      {status === 'billed' && current && canBill(role) && (
+        <PaymentForm
+          key={current.balance}
+          balance={current.balance}
+          busy={run.isPending}
+          onPay={pay}
+          onReopen={current.payments.length === 0 ? () => act('reopen') : undefined}
+        />
+      )}
+      {(status === 'billed' || status === 'paid') && (
+        <div className="grid gap-2 text-center">
+          <Button variant="outline" size="lg" className="h-11" onClick={printBill}>
+            Print bill
+          </Button>
+          {notice && <p className="text-sm text-muted-foreground">{notice}</p>}
+        </div>
+      )}
+      {(status === 'paid' || status === 'cancelled') &&
+        // Closed orders are usually opened from history; go back there with its filters.
+        (location.key !== 'default' ? (
+          <button
+            onClick={() => navigate(-1)}
+            className="text-center text-sm text-muted-foreground hover:text-foreground"
+          >
+            Back
+          </button>
+        ) : (
+          <Link to="/floor" className="text-center text-sm text-muted-foreground hover:text-foreground">
+            Back to floor
+          </Link>
+        ))}
+    </>
+  )
 
-        {current && <Totals order={current} />}
-        {error && <p className="text-sm text-destructive">{error}</p>}
+  const panel = 'grid gap-5 rounded-2xl border bg-background p-5'
 
-        {status === 'open' && current && (
-          <OpenActions
-            order={current}
-            busy={run.isPending}
-            mayBill={canBill(role)}
-            onFire={() => act('fire')}
-            onBill={(discount, discount_type) => act('bill', { discount, discount_type })}
-            onCancel={() => window.confirm('Cancel this whole order?') && act('cancel')}
-          />
-        )}
-        {status === 'billed' && current && canBill(role) && (
-          <PaymentForm
-            key={current.balance}
-            balance={current.balance}
-            busy={run.isPending}
-            onPay={pay}
-            onReopen={current.payments.length === 0 ? () => act('reopen') : undefined}
-          />
-        )}
-        {(status === 'billed' || status === 'paid') && (
-          <div className="grid gap-2 text-center">
-            <Button variant="outline" size="lg" className="h-11" onClick={printBill}>
-              Print bill
-            </Button>
-            {notice && <p className="text-sm text-muted-foreground">{notice}</p>}
-          </div>
-        )}
-        {(status === 'paid' || status === 'cancelled') &&
-          // Closed orders are usually opened from history; go back there with its filters.
-          (location.key !== 'default' ? (
-            <button
-              onClick={() => navigate(-1)}
-              className="text-center text-sm text-muted-foreground hover:text-foreground"
-            >
-              Back
-            </button>
-          ) : (
-            <Link to="/floor" className="text-center text-sm text-muted-foreground hover:text-foreground">
-              Back to floor
-            </Link>
-          ))}
-      </aside>
+  // Taking an order: the menu fills the screen and the cart sits on the right.
+  if (status === 'open')
+    return (
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 pb-20 lg:grid-cols-[minmax(0,1fr)_26rem] lg:pb-0">
+        <MenuPicker items={items} onAdd={add} busy={run.isPending} />
+        <aside id="cart" className={cn(panel, 'scroll-mt-20 lg:sticky lg:top-20')}>
+          {summary}
+          {actions}
+        </aside>
+        <CartBar items={items} total={current?.total} />
+      </div>
+    )
+
+  // Billed, paid or cancelled: the bill (receipt width) beside payment and printing.
+  return (
+    <div className="mx-auto grid w-full max-w-[68rem] grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[minmax(0,1fr)_26rem]">
+      <section className={panel}>{summary}</section>
+      <aside className={cn(panel, 'lg:sticky lg:top-20')}>{actions}</aside>
+    </div>
+  )
+}
+
+/** Phones and tablets: the cart is below the menu, so this bar keeps it one tap away. */
+function CartBar({ items, total }: { items: OrderItem[]; total?: string }) {
+  const count = items.reduce((n, i) => n + i.quantity, 0)
+  const unsent = items.reduce((n, i) => n + Math.max(i.quantity - i.kot_quantity, 0), 0)
+  if (count === 0) return null
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-10 border-t bg-background/95 px-4 py-3 backdrop-blur sm:px-8 lg:hidden">
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1 text-sm">
+          <p className="font-medium">
+            {count} {count === 1 ? 'item' : 'items'}
+            {total !== undefined && <span className="tabular-nums"> · {money(total)}</span>}
+          </p>
+          {unsent > 0 && <p className="text-xs text-amber-700">{unsent} not sent to the kitchen</p>}
+        </div>
+        <Button
+          size="lg"
+          onClick={() => document.getElementById('cart')?.scrollIntoView({ behavior: 'smooth' })}
+        >
+          View order
+        </Button>
+      </div>
     </div>
   )
 }
@@ -484,14 +529,14 @@ function OpenActions(props: {
         props.mayBill &&
         hasItems && (
           <div className="flex gap-2">
-            <div className="flex h-11 w-36 items-center rounded-lg border bg-background pr-1 focus-within:border-ring">
+            <div className="flex h-11 w-40 items-center rounded-lg border bg-background pr-1 focus-within:border-ring">
               <input
                 value={discount}
                 onChange={(e) => setDiscount(e.target.value)}
                 inputMode="decimal"
                 placeholder="Discount"
                 aria-label={type === 'percent' ? 'Discount percent' : 'Discount amount'}
-                className="w-full min-w-0 bg-transparent px-3 text-sm outline-none tabular-nums"
+                className="w-full min-w-0 bg-transparent px-2.5 text-sm outline-none tabular-nums"
               />
               {(['percent', 'amount'] as const).map((t) => (
                 <button

@@ -66,7 +66,7 @@ export function ReportsPage() {
   })
 
   return (
-    <div className="mx-auto grid max-w-6xl gap-5">
+    <div className="grid gap-5">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Reports</h1>

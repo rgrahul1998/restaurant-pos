@@ -64,7 +64,8 @@ export default function App() {
             <Route path="/menu" element={<MenuPage />} />
             <Route path="/staff" element={<StaffPage />} />
             <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/backup" element={<Navigate to="/settings" replace />} />
+            <Route path="/settings/:section" element={<SettingsPage />} />
+            <Route path="/backup" element={<Navigate to="/settings/backup" replace />} />
             <Route
               path="/printer"
               element={

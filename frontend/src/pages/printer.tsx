@@ -291,7 +291,8 @@ export function PrinterPage() {
   )
 
   return (
-    <div className="mx-auto grid max-w-xl gap-5">
+    <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,32rem)_minmax(0,1fr)]">
+      <div className="grid gap-5">
       <section
         role="status"
         aria-live="polite"
@@ -326,6 +327,8 @@ export function PrinterPage() {
           automatically.
         </p>
       </section>
+
+      </div>
 
       <section className="grid gap-3 rounded-2xl border bg-background p-5">
         <h2 className="text-sm font-medium">Printed since this page opened</h2>

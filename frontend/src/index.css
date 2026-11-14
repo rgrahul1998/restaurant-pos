@@ -131,4 +131,17 @@
   html {
     @apply font-sans;
     }
+  /* A grid without its own columns gets one column that can shrink: a long row of chips or a
+     wide card inside can then never push the page wider than the screen (phones, tablets).
+     Any grid-cols-* utility still wins, being in the utilities layer. */
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* Rows that scroll sideways (category chips, the menu tabs) swipe without a scrollbar. */
+  .overflow-x-auto {
+    scrollbar-width: none;
+  }
+  .overflow-x-auto::-webkit-scrollbar {
+    display: none;
+  }
 }

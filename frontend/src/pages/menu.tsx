@@ -119,10 +119,11 @@ export function MenuPage() {
   }
 
   return (
-    <div className="mx-auto grid max-w-4xl gap-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
+    <div className="grid gap-6">
+      <header className="flex flex-wrap items-center gap-x-6 gap-y-3">
         <h1 className="text-lg font-semibold tracking-tight">Menu</h1>
-        <div className="flex gap-2">
+        <MenuTabs tab={tab} onChange={setTab} />
+        <div className="ml-auto flex gap-2">
           <Button variant="outline" size="lg" onClick={() => setPanel({ kind: 'import' })}>
             <Upload /> Import
           </Button>
@@ -132,22 +133,6 @@ export function MenuPage() {
         </div>
       </header>
 
-      <nav className="flex gap-1 overflow-x-auto rounded-xl bg-muted p-1 text-sm sm:w-fit">
-        {TABS.map((t) => (
-          <button
-            key={t.value}
-            onClick={() => setTab(t.value)}
-            className={cn(
-              'h-8 shrink-0 rounded-lg px-3 transition-colors',
-              tab === t.value
-                ? 'bg-background font-medium shadow-sm'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </nav>
 
       {body}
 
@@ -172,6 +157,27 @@ export function MenuPage() {
         </Sheet>
       )}
     </div>
+  )
+}
+
+function MenuTabs({ tab, onChange }: { tab: Tab; onChange: (tab: Tab) => void }) {
+  return (
+    <nav className="order-last flex w-full gap-1 overflow-x-auto rounded-xl bg-muted p-1 text-sm sm:order-none sm:w-fit">
+      {TABS.map((t) => (
+        <button
+          key={t.value}
+          onClick={() => onChange(t.value)}
+          className={cn(
+            'h-8 shrink-0 rounded-lg px-3 transition-colors',
+            tab === t.value
+              ? 'bg-background font-medium shadow-sm'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          {t.label}
+        </button>
+      ))}
+    </nav>
   )
 }
 
@@ -213,18 +219,19 @@ function ItemsTab(props: {
   const courseName = (id: number | null) => props.courses.find((c) => c.id === id)?.name
 
   return (
-    <div className="grid gap-4">
-      <div className="relative">
+    <div className="grid gap-5">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+      <div className="relative lg:w-72 lg:shrink-0">
         <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search items"
           aria-label="Search items"
-          className="h-10 rounded-xl bg-background pl-10"
+          className="h-9 rounded-xl bg-background pl-10"
         />
       </div>
-      <div className="flex gap-2 overflow-x-auto">
+      <div className="flex min-w-0 gap-2 overflow-x-auto">
         {[
           { id: 'all' as const, name: 'All' },
           ...props.categories,
@@ -247,6 +254,7 @@ function ItemsTab(props: {
           </button>
         ))}
       </div>
+      </div>
 
       {groups.length === 0 ? (
         <PageState>{query ? 'Nothing matches.' : 'No items here yet.'}</PageState>
@@ -260,11 +268,11 @@ function ItemsTab(props: {
                 {!c.is_active && ' · category hidden from the order screen'}
               </span>
             </h2>
-            <ul className="divide-y overflow-hidden rounded-2xl border bg-background">
+            <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(22rem,100%),1fr))] gap-3">
               {items.map((item) => (
                 <li
                   key={item.id}
-                  className="flex cursor-pointer items-center gap-4 px-4 py-3 transition-colors hover:bg-muted/50"
+                  className="flex cursor-pointer items-center gap-4 rounded-2xl border bg-background p-4 transition-colors hover:border-foreground/30"
                   onClick={() => props.onOpen(item)}
                 >
                   {item.image ? (
@@ -274,24 +282,25 @@ function ItemsTab(props: {
                     <p className="flex items-center gap-2 font-medium">
                       <VegMark veg={item.is_vegetarian} />
                       <span className="truncate">{item.name}</span>
-                      {item.has_jain && (
-                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800">
-                          Jain option
-                        </span>
-                      )}
+                    </p>
+                    {/* Tags under the name, so long names keep the whole first line. */}
+                    <p className="mt-1 flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground">
                       {item.is_special && (
-                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
+                        <span className="shrink-0 rounded-full bg-amber-100 px-2 py-px text-xs font-medium text-amber-900">
                           Special
                         </span>
                       )}
-                    </p>
-                    {(item.course || item.description) && (
-                      <p className="truncate text-sm text-muted-foreground">
+                      {item.has_jain && (
+                        <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-px text-xs font-medium text-emerald-800">
+                          Jain
+                        </span>
+                      )}
+                      <span className="truncate">
                         {[courseName(item.course), item.description].filter(Boolean).join(' · ')}
-                      </p>
-                    )}
+                      </span>
+                    </p>
                   </div>
-                  <span className="w-20 text-right font-medium tabular-nums">{money(item.price)}</span>
+                  <span className="text-right font-medium tabular-nums">{money(item.price)}</span>
                   <Switch
                     label={`${item.name} available`}
                     checked={item.is_available}
@@ -501,12 +510,12 @@ function SimpleList(props: {
 }) {
   if (props.rows.length === 0) return <PageState>{props.empty}</PageState>
   return (
-    <ul className="divide-y overflow-hidden rounded-2xl border bg-background">
+    <ul className="grid grid-cols-[repeat(auto-fill,minmax(18rem,1fr))] gap-3">
       {props.rows.map((row) => (
         <li key={row.id}>
           <button
             onClick={row.onOpen}
-            className="flex w-full items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-muted/50"
+            className="flex h-full w-full items-center gap-4 rounded-2xl border bg-background p-4 text-left transition-colors hover:border-foreground/30"
           >
             <div className={cn('min-w-0 flex-1', row.off && 'opacity-50')}>
               <p className="font-medium">{row.title}</p>

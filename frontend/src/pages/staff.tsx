@@ -94,36 +94,34 @@ export function StaffPage() {
         {visible.length === 0 ? (
           <PageState>{query ? 'Nobody matches.' : 'No staff here.'}</PageState>
         ) : (
-          <ul className="divide-y overflow-hidden rounded-2xl border bg-background">
+          <ul className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3">
             {visible.map((u) => (
               <li key={u.id}>
                 <button
                   onClick={() => setPanel({ user: u })}
-                  className="flex w-full items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-muted/50"
+                  className="flex h-full w-full items-center gap-3 rounded-2xl border bg-background p-4 text-left transition-colors hover:border-foreground/30"
                 >
                   <span
                     className={cn(
-                      'grid size-9 shrink-0 place-items-center rounded-full bg-muted text-xs font-medium',
+                      'grid size-10 shrink-0 place-items-center rounded-full bg-muted text-xs font-medium',
                       !u.is_active && 'opacity-50',
                     )}
                   >
                     {initials(u)}
                   </span>
                   <div className={cn('min-w-0 flex-1', !u.is_active && 'opacity-50')}>
-                    <p className="font-medium">
+                    <p className="truncate font-medium">
                       {fullName(u)}
-                      {u.id === me.id && <span className="ml-2 font-normal text-muted-foreground">(you)</span>}
+                      {u.id === me.id && <span className="ml-1.5 font-normal text-muted-foreground">(you)</span>}
                     </p>
                     <p className="truncate text-sm text-muted-foreground">
                       {[fullName(u) !== u.username && u.username, u.phone].filter(Boolean).join(' · ') || 'No name or phone yet'}
                     </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {roleLabel(u.role)}
+                      {!u.is_active && ' · Deactivated'}
+                    </p>
                   </div>
-                  {!u.is_active && (
-                    <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                      Deactivated
-                    </span>
-                  )}
-                  <span className="w-20 text-right text-sm text-muted-foreground">{roleLabel(u.role)}</span>
                 </button>
               </li>
             ))}
@@ -134,23 +132,23 @@ export function StaffPage() {
   }
 
   return (
-    <div className="mx-auto grid max-w-3xl gap-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-lg font-semibold tracking-tight">Staff</h1>
+    <div className="grid gap-5">
+      <header className="flex flex-wrap items-center gap-3">
+        <h1 className="mr-auto text-lg font-semibold tracking-tight">Staff</h1>
+        <div className="relative order-last w-full sm:order-none sm:w-80">
+          <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name, username or phone"
+            aria-label="Search staff"
+            className="h-9 rounded-xl bg-background pl-10"
+          />
+        </div>
         <Button size="lg" onClick={() => setPanel({})}>
           <Plus /> Add staff
         </Button>
       </header>
-      <div className="relative">
-        <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name, username or phone"
-          aria-label="Search staff"
-          className="h-10 rounded-xl bg-background pl-10"
-        />
-      </div>
       {body}
       {panel && (
         <Sheet onClose={() => setPanel(null)}>

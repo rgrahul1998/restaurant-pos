@@ -111,11 +111,10 @@ export function HistoryPage() {
   const filtered = Boolean(status || type || table || q || range !== 'today')
 
   return (
-    <div className="mx-auto grid max-w-4xl gap-5">
-      <h1 className="text-lg font-semibold tracking-tight">Order history</h1>
-
-      {/* ---------- filters ---------- */}
-      <section className="grid gap-3 rounded-2xl border bg-background p-4">
+    <div className="grid items-start gap-6 xl:grid-cols-[22rem_minmax(0,1fr)]">
+      {/* ---------- filters: a column on the left on wide screens ---------- */}
+      <section className="grid gap-4 rounded-2xl border bg-background p-4 xl:sticky xl:top-20">
+        <h1 className="text-lg font-semibold tracking-tight">Order history</h1>
         <div className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -129,7 +128,7 @@ export function HistoryPage() {
 
         <DateRangeFilter filters={filters} />
 
-        <div className="grid gap-3 sm:grid-cols-[1fr_1fr_14rem]">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 xl:grid">
           <Pills label="Status" options={STATUSES} value={status} onChange={(v) => update({ status: v })} />
           <Pills label="Type" options={TYPES} value={type} onChange={(v) => update({ type: v })} />
           <Select
@@ -155,6 +154,7 @@ export function HistoryPage() {
         )}
       </section>
 
+      <div className="grid min-w-0 gap-5">
       {/* ---------- summary ---------- */}
       {summary.data && (
         <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -201,6 +201,7 @@ export function HistoryPage() {
           )}
         </div>
       )}
+      </div>
     </div>
   )
 }

@@ -112,10 +112,22 @@ def company_data() -> dict:
     city = " ".join(filter(None, [restaurant.city, restaurant.pincode]))
     return {
         "name": restaurant.name,
+        "legal_name": restaurant.legal_name,
         "phone": restaurant.phone,
         "address_lines": list(
-            filter(None, [restaurant.address_line1, restaurant.address_line2, city])
+            filter(
+                None,
+                [
+                    restaurant.address_line1,
+                    restaurant.address_line2,
+                    ", ".join(filter(None, [city, restaurant.state])),
+                ],
+            )
         ),
+        "email": restaurant.email,
+        "gstin": restaurant.gstin,
+        "fssai": restaurant.fssai,
+        "footer": restaurant.bill_footer,
     }
 
 

@@ -178,7 +178,7 @@ def _payment_modes(invoice):
 
 
 def build_bill(invoice, company=None, width=48):
-    """Return bill bytes. `company` holds name, address_lines and phone."""
+    """Return bill bytes. `company` is `services.company_data()`: name, address, ids, footer."""
     company = company or {}
     is_paid = invoice.get("docstatus") == 1
 
@@ -190,11 +190,19 @@ def build_bill(invoice, company=None, width=48):
         + _line(_clean(company.get("name") or invoice.get("company")))
     )
     output += SIZE_NORMAL + BOLD_OFF
-    for line in company.get("address_lines") or []:
+    lines = [company.get("legal_name"), *(company.get("address_lines") or [])]
+    if company.get("phone"):
+        lines.append(f"Phone: {_clean(company.get('phone'))}")
+    if company.get("email"):
+        lines.append(_clean(company.get("email")))
+    # Not in invento_print: a registered restaurant must show these on its bills.
+    if company.get("gstin"):
+        lines.append(f"GSTIN: {_clean(company.get('gstin'))}")
+    if company.get("fssai"):
+        lines.append(f"FSSAI Lic. No: {_clean(company.get('fssai'))}")
+    for line in filter(None, lines):
         for part in textwrap.wrap(_clean(line), width):
             output += _line(part)
-    if company.get("phone"):
-        output += _line(f"Phone: {_clean(company.get('phone'))}")
 
     output += ALIGN_LEFT + _divider(width) + _customer_block(invoice, width)
     if is_paid and _payment_modes(invoice):
@@ -240,13 +248,13 @@ def build_bill(invoice, company=None, width=48):
         output += _row("Paid", _money(paid if paid is not None else grand_total - advance), width)
     output += _divider(width)
 
-    output += (
-        ALIGN_CENTER
-        + _line("Thank You. Visit Again.")
-        + ALIGN_LEFT
-        + _divider(width)
-        + ALIGN_CENTER
-    )
+    footer = _clean(company.get("footer", "Thank You. Visit Again."))
+    if footer:
+        output += ALIGN_CENTER
+        for part in textwrap.wrap(footer, width):
+            output += _line(part)
+        output += ALIGN_LEFT + _divider(width)
+    output += ALIGN_CENTER
     for line in BILL_FOOTER:
         for part in textwrap.wrap(line, width):
             output += _line(part)

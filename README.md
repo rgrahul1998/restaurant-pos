@@ -37,7 +37,7 @@ Bill with a discount as an amount or a percentage, then take payment by cash, ca
 You can split a bill across methods or take it in part payments. A billed order can be reopened
 until the first payment. Any reservation advance comes off the balance.
 
-| Advance from a booking | Split payment |
+| Paid with a booking advance | Split payment |
 |---|---|
 | ![Bill with advance](docs/screenshots/05-bill-advance.jpg) | ![Split payment](docs/screenshots/06-split-payment.jpg) |
 
@@ -81,10 +81,18 @@ no dish is ever deleted.
 
 ![Menu import](docs/screenshots/14b-menu-import.jpg)
 
-### Backups
-Automatic backups on a schedule you set (default: every 3 hours, kept 7 days), plus a download
-button. One zip holds everything, and it restores onto a new server from the setup screen or the
-command line.
+### Settings
+Admins only, with a tab on the left for each part (more can be added later):
+
+- **Restaurant details:** the name, legal name, address, state, PIN code, phone, email, **GSTIN**,
+  **FSSAI licence number** and the message at the bottom of the bill. A live preview shows how the
+  bill will read. GSTIN and FSSAI print only when filled in. The POS does not calculate GST, so the
+  bill shows the GSTIN without tax lines.
+- **Backup:** automatic backups on a schedule you set (default: every 3 hours, kept 7 days), plus a
+  download button. One zip holds everything, and it restores onto a new server from the setup screen
+  or the command line.
+
+![Restaurant details with bill preview](docs/screenshots/15-settings-restaurant.jpg)
 
 ![Backup settings](docs/screenshots/15-settings-backup.jpg)
 
@@ -331,7 +339,8 @@ and change lines.
 - **Bills** print when an order is billed, and again from "Print bill" on a billed or paid order. If the page hasn't checked in during the last 30 seconds, the POS says the bill was not printed.
 - **Nothing is lost:** a ticket counts as printed only once QZ Tray accepts it. After an outage, unprinted KOTs from the last 12 hours and bills from the last 2 hours print.
 - **Reprint** on a kitchen ticket prints a copy marked `REPRINT`.
-- **Bill header:** restaurant name, address and phone come from "Restaurant details" in the admin.
+- **Bill header:** name, legal name, address, phone, email, GSTIN and FSSAI number, and the footer
+  message, come from **Settings → Restaurant details** (`/api/settings/restaurant/`).
 - **Language:** tickets print English text only. Other characters print as `?`.
 
 Laptop setup: install QZ Tray from <https://qz.io/download>, check each printer prints a Windows
@@ -354,7 +363,7 @@ restart QZ Tray. Keep the private key on the server only.
 
 ## Backup and moving servers
 
-**Settings → Backup** (`/settings`, Admin only) downloads everything in one zip: every table (orders, payments,
+**Settings → Backup** (`/settings/backup`, Admin only) downloads everything in one zip: every table (orders, payments,
 KOTs, reservations, menu, tables, staff accounts with their password hashes, restaurant details, and
 the change history) with original ids, plus uploaded photos. Logic is in `apps/core/backup.py`.
 
@@ -380,6 +389,8 @@ the change history) with original ids, plus uploaded photos. Logic is in `apps/c
   ```
 
   Only one backup is written at a time (Postgres advisory lock), so two workers are harmless.
+  A backup never replaces another: two in the same minute are saved as `…-1430.zip` and
+  `…-1430-2.zip`.
 - `uv run python manage.py create_backup /path/to/folder` writes a one-off dated zip.
 - Not included: `.env` and the QZ Tray certificate files. Copy those yourself.
 - The zip holds password hashes and customer phone numbers: store it like you'd store the database.

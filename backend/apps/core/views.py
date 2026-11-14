@@ -12,6 +12,8 @@ from rest_framework.views import APIView
 from apps.core import backup, scheduler
 from apps.core.models import BackupSettings
 from apps.core.permissions import role_permission
+from apps.printing.models import Restaurant
+from apps.printing.serializers import RestaurantSerializer
 from apps.users.models import Role
 
 
@@ -110,3 +112,18 @@ class BackupFileView(APIView):
             filename=name,
             content_type="application/zip",
         )
+
+
+class RestaurantSettingsView(APIView):
+    """Settings → Restaurant: name, address and registration numbers printed on the bill."""
+
+    permission_classes = [AdminOnly]
+
+    def get(self, request):
+        return Response(RestaurantSerializer(Restaurant.load()).data)
+
+    def patch(self, request):
+        body = RestaurantSerializer(Restaurant.load(), data=request.data, partial=True)
+        body.is_valid(raise_exception=True)
+        body.save()
+        return Response(body.data)
