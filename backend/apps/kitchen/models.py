@@ -82,3 +82,41 @@ class KOTItem(models.Model):
 
     def __str__(self):
         return f"{self.quantity} × {self.name}{' (J)' if self.is_jain else ''}"
+
+
+def default_cooking_instructions():
+    return [
+        "1 by 2",
+        "Soft",
+        "Crispy",
+        "Extra crispy",
+        "Spicy",
+        "Extra spicy",
+        "Less spicy",
+        "Less oil",
+        "No onion",
+        "No garlic",
+    ]
+
+
+class KitchenSettings(models.Model):
+    """Settings → Cooking instructions: the one-tap notes a waiter can add to a line.
+
+    Exactly one row. Anything else can still be typed on the order screen.
+    """
+
+    cooking_instructions = models.JSONField(default=default_cooking_instructions, blank=True)
+
+    class Meta:
+        verbose_name = verbose_name_plural = "kitchen settings"
+
+    def __str__(self):
+        return "Kitchen settings"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls):
+        return cls.objects.get_or_create(pk=1)[0]

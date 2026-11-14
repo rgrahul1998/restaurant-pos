@@ -1,5 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, CheckCircle2, DatabaseBackup, Download, Printer, Store, XCircle } from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  CheckCircle2,
+  ChefHat,
+  DatabaseBackup,
+  Download,
+  Printer,
+  Store,
+  X,
+  XCircle,
+} from 'lucide-react'
 import { useState } from 'react'
 import { NavLink, Navigate, useParams } from 'react-router-dom'
 
@@ -7,7 +19,7 @@ import { Pills } from '@/components/date-range'
 import { Switch } from '@/components/fields'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ApiError, api, download, patch, post } from '@/lib/api'
+import { ApiError, api, download, patch, post, put } from '@/lib/api'
 import { canPrintHere, printRaw } from '@/lib/device-printer'
 import { time } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -51,6 +63,7 @@ const hours = (h: number) => (h === 1 ? 'hour' : `${h} hours`)
 const SECTIONS = [
   { path: 'restaurant', label: 'Restaurant details', icon: Store, page: RestaurantSettings },
   { path: 'printing', label: 'Printing', icon: Printer, page: PrintingSettings },
+  { path: 'cooking', label: 'Cooking instructions', icon: ChefHat, page: CookingInstructionsSettings },
   { path: 'backup', label: 'Backup', icon: DatabaseBackup, page: BackupSettings },
 ] as const
 
@@ -260,6 +273,132 @@ function BillPreview({ r }: { r: Restaurant }) {
       <div className="my-2 border-t border-dashed border-neutral-400" />
       {r.bill_footer && <div>{r.bill_footer}</div>}
     </div>
+  )
+}
+
+// ---------- cooking instructions ----------
+
+function CookingInstructionsSettings() {
+  const queryClient = useQueryClient()
+  const saved = useQuery({
+    queryKey: ['settings', 'cooking-instructions'],
+    queryFn: () => api<{ instructions: string[] }>('/settings/cooking-instructions/'),
+  })
+  const [draft, setDraft] = useState<string[] | null>(null)
+  const [adding, setAdding] = useState('')
+  const [done, setDone] = useState(false)
+  const save = useMutation({
+    mutationFn: (instructions: string[]) =>
+      put<{ instructions: string[] }>('/settings/cooking-instructions/', { instructions }),
+    onSuccess: (fresh) => {
+      queryClient.setQueryData(['settings', 'cooking-instructions'], fresh)
+      setDraft(null)
+      setDone(true)
+    },
+  })
+
+  const title = 'Cooking instructions'
+  const description = 'One-tap notes on the order screen, in this order. Anything else can still be typed there.'
+  if (saved.isPending) return <Section title={title}><p className="text-sm text-muted-foreground">Loading…</p></Section>
+  if (saved.isError) return <Section title={title}><p className="text-sm text-destructive">{saved.error.message}</p></Section>
+
+  const list = draft ?? saved.data.instructions
+  const dirty = draft !== null && JSON.stringify(draft) !== JSON.stringify(saved.data.instructions)
+  const errors = (save.error instanceof ApiError && typeof save.error.data === 'object' ? save.error.data : {}) as Record<string, unknown>
+  const fieldError = Array.isArray(errors.instructions)
+    ? String(errors.instructions[0])
+    : errors.instructions && typeof errors.instructions === 'object'
+      ? String(Object.values(errors.instructions as Record<string, string[]>)[0]?.[0] ?? '')
+      : ''
+  const update = (next: string[]) => {
+    setDraft(next)
+    setDone(false)
+  }
+  const text = adding.replace(/,/g, ' ').replace(/\s+/g, ' ').trim()
+  const exists = list.some((i) => i.toLowerCase() === text.toLowerCase())
+  const add = () => {
+    if (!text || exists) return
+    update([...list, text])
+    setAdding('')
+  }
+  const move = (from: number, to: number) => {
+    const next = [...list]
+    next.splice(to, 0, next.splice(from, 1)[0])
+    update(next)
+  }
+
+  return (
+    <form
+      className="grid gap-6"
+      onSubmit={(e) => {
+        e.preventDefault()
+        save.mutate(list)
+      }}
+    >
+      <Section title={title} description={description}>
+        <div className="flex gap-2">
+          <Input
+            value={adding}
+            maxLength={60}
+            placeholder="e.g. No coriander"
+            aria-label="New cooking instruction"
+            onChange={(e) => setAdding(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                add()
+              }
+            }}
+            className="h-10"
+          />
+          <Button type="button" variant="outline" size="lg" disabled={!text || exists} onClick={add}>
+            Add
+          </Button>
+        </div>
+        {exists && <p className="-mt-3 text-xs text-muted-foreground">Already in the list.</p>}
+
+        {list.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No quick instructions. Waiters can still type one.</p>
+        ) : (
+          <ul className="divide-y rounded-xl border">
+            {list.map((item, i) => (
+              <li key={item} className="flex items-center gap-1 py-1.5 pr-1.5 pl-4">
+                <span className="mr-auto min-w-0 truncate text-sm">{item}</span>
+                <Button type="button" variant="ghost" size="icon-sm" aria-label={`Move ${item} up`} disabled={i === 0} onClick={() => move(i, i - 1)}>
+                  <ArrowUp />
+                </Button>
+                <Button type="button" variant="ghost" size="icon-sm" aria-label={`Move ${item} down`} disabled={i === list.length - 1} onClick={() => move(i, i + 1)}>
+                  <ArrowDown />
+                </Button>
+                <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove ${item}`} className="text-muted-foreground hover:text-destructive" onClick={() => update(list.filter((_, j) => j !== i))}>
+                  <X />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {fieldError && <p className="text-sm text-destructive">{fieldError}</p>}
+      </Section>
+
+      <div className="sticky bottom-0 flex items-center justify-end gap-3 rounded-2xl border bg-background/95 px-4 py-3 shadow-sm">
+        {done && !dirty && (
+          <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <CheckCircle2 className="size-4 text-emerald-600" /> Saved
+          </span>
+        )}
+        {save.error && !(save.error instanceof ApiError && save.error.status === 400) && (
+          <span className="text-sm text-destructive">{save.error.message}</span>
+        )}
+        {dirty && (
+          <Button type="button" variant="ghost" size="lg" onClick={() => { setDraft(null); save.reset() }}>
+            Discard
+          </Button>
+        )}
+        <Button type="submit" size="lg" disabled={!dirty || save.isPending}>
+          {save.isPending ? 'Saving…' : 'Save changes'}
+        </Button>
+      </div>
+    </form>
   )
 }
 
