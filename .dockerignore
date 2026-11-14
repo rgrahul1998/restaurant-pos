@@ -13,3 +13,4 @@ backend/staticfiles
 *.pem
 pos-backup-*.zip
 docs
+android-app
