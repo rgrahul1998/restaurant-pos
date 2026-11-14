@@ -63,7 +63,7 @@ def test_kot_prints_once_in_the_shared_format(api, order):
     assert (ticket["kind"], ticket["label"]) == ("kot", f"KOT-{ticket['id']} - T11 - New Order")
     paper = ticket["ticket"]
     expected = (
-        b"KOT", b"Kitchen", b"Name: Avijit", b"Tel#: 2222222222", f"No: #{order['id']}".encode(),
+        b"KOT", b"Name: Avijit", b"Tel#: 2222222222", f"No: #{order['id']}".encode(),
         b"Dine In", b"Table No: T11", b"ITEM", b"QTY", b"Phulka", b"X 5", b"* less oil",
         b"By: Waiter", f"KOT-{ticket['id']}".encode(),
     )  # fmt: skip
@@ -86,7 +86,7 @@ def test_first_run_page_prints_nothing_old(api, order):
     assert pending(api(Role.KITCHEN), since=response.data["now"].isoformat()) == []
 
 
-def test_cancellation_and_reprint_tickets(api, order):
+def test_cancellations_are_not_printed_and_reprint(api, order):
     waiter, manager = api(Role.WAITER), api(Role.MANAGER)
     url = f"/api/orders/{order['id']}/"
     waiter.post(url + "fire/")
@@ -94,9 +94,9 @@ def test_cancellation_and_reprint_tickets(api, order):
     manager.patch(url, {"lines": [{"id": line, "quantity": 3}]}, format="json")
     manager.post(url + "fire/")
 
-    first, cancel = pending(waiter)
-    assert b"PARTLY CANCELLED" in cancel["ticket"]
-    assert b"5 > 3" in cancel["ticket"]
+    # The reduction is on the kitchen screen, but only the original ticket prints.
+    assert KOT.objects.filter(order=order["id"], type="partially_cancelled").exists()
+    (first,) = pending(waiter)
 
     assert waiter.post(f"/api/kots/{first['id']}/reprint/").status_code == 204
     reprint = pending(waiter)[-1]
@@ -144,7 +144,8 @@ def test_bill_needs_the_printer_page_and_prints_once(api, order):
     assert b"M.O.P: UPI\n" in paid and b"Paid" in paid
 
 
-def test_test_ticket_and_unsigned_qz(api):
+def test_test_ticket_and_unsigned_qz(api, settings):
+    settings.QZ_CERTIFICATE_FILE = settings.QZ_PRIVATE_KEY_FILE = ""
     client = api(Role.KITCHEN)
     response = client.get("/api/printing/test-ticket/", {"printer": "RETSOL", "width": 32})
     assert b"RETSOL" in base64.b64decode(response.data["ticket"])

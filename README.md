@@ -20,20 +20,24 @@ table. Every screen updates live over websockets.
 Tap dishes to add them, search the menu or filter by category, and add a note for the kitchen.
 Dishes with a **Jain** option ask Regular or Jain when added; a Jain portion gets its own line and
 prints as `Dish (J)`. Unavailable dishes are greyed out. **Send to kitchen** sends only what changed
-since the last send.
+since the last send, all on one KOT.
 
 ![Order screen](docs/screenshots/04-order.jpg)
 
 ### Kitchen display and KOTs
-Kitchen staff see one ticket per station (Tandoor, Main Kitchen, Bar…) and move it from **Start** to
+Each **Send to kitchen** makes one ticket listing every item sent, whatever its station. Kitchen staff
+see it on every station's screen and move it from **Start** to
 **Ready** to **Served**. Add-ons, part-cancellations and cancellations get their own tickets, and Jain
-lines are tagged. KOTs print on a thermal printer through [QZ Tray](https://qz.io). Any ticket can be
+lines are tagged. KOTs print on a thermal printer through [QZ Tray](https://qz.io); cancellations
+and reduced quantities show on screen only. Any ticket can be
 reprinted.
 
 ![Kitchen display](docs/screenshots/07-kitchen.jpg)
 
 ### Billing and payments
 Bill with a discount as an amount or a percentage, then take payment by cash, card, UPI or other.
+**Bill** first asks for confirmation, with optional customer name and mobile number fields. Both are
+saved on the order for promotions later. The mobile is stored as 10 digits.
 You can split a bill across methods or take it in part payments. A billed order can be reopened
 until the first payment. Any reservation advance comes off the balance.
 
@@ -237,7 +241,7 @@ and `frontend/src/lib/nav.ts` mirrors it for navigation.
 Admins and Managers run the menu; only Admins see or manage staff. The Django admin isn't needed day to day.
 
 - **Menu** (`/menu`): items (price, category, course, photo, veg, today's special), categories (which
-  kitchen station gets their tickets; none means no ticket), courses and kitchen stations. The switch on
+  kitchen station cooks them; every item prints on the KOT either way), courses and kitchen stations. The switch on
   each item row marks it unavailable at once.
 - **Jain:** tick "Jain option" on a dish and the order screen asks Regular or Jain when it's added.
   A Jain portion is its own order line (`is_jain`, same price) and prints as `Dish name (J)` on the
@@ -261,8 +265,8 @@ serializers only call into it.
 |---|---|---|
 | Open | `POST /api/orders/` | Table becomes occupied. A table holds one active order. |
 | Edit cart | `PATCH /api/orders/{id}/` with `lines` | `{menu_item, quantity}` adds, `{id, quantity}` edits, quantity 0 removes. |
-| Send to kitchen | `POST /api/orders/{id}/fire/` | One ticket per station with only what changed since the last send: additions as New / Modified, reductions as a cancellation ticket. |
-| Bill | `POST /api/orders/{id}/bill/` `{discount, discount_type}` | Needs everything sent. `discount_type` is `amount` (default) or `percent`. Order locks, table shows billed. `reopen/` undoes it until a payment exists. |
+| Send to kitchen | `POST /api/orders/{id}/fire/` | One ticket listing every item that changed since the last send: additions as New / Modified, reductions on a separate cancellation ticket. |
+| Bill | `POST /api/orders/{id}/bill/` `{discount, discount_type, customer_name?, customer_phone?}` | Needs everything sent. Customer fields are optional; left out, the order keeps what it has. `discount_type` is `amount` (default) or `percent`. Order locks, table shows billed. `reopen/` undoes it until a payment exists. |
 | Pay | `POST /api/payments/` | Part payments and split methods allowed, never more than the balance. Paying the balance closes the order and frees the table. |
 | Cancel | `POST /api/orders/{id}/cancel/` | Sends cancellation tickets for anything the kitchen has, frees the table. |
 
@@ -334,8 +338,8 @@ The ticket layout is `apps/printing/ticket.py`, ported from our `invento_print` 
 `/kot-printer` page) so paper looks the same on both systems, minus the GST, round-off, merged-bill
 and change lines.
 
-- **Printer page:** open `/printer` on the laptop, choose a KOT printer, a bill printer and the paper width (80 mm or 58 mm), and keep the page open. It checks for work every 3 seconds.
-- **KOTs** print automatically, including add-on and cancellation tickets. Only KOTs created after the page's first run on that computer are printed.
+- **Printer page:** open `/printer` on the laptop, choose a KOT printer, a bill printer and the paper width (80 mm or 58 mm), and keep the page open. The server pings it over a websocket (`/ws/printer/`) the moment a KOT or bill is waiting, so tickets print within about a second; it also checks every 3 seconds in case a ping is missed.
+- **KOTs** print automatically, including add-on tickets. Cancellations and reduced quantities show on the kitchen screen but don't print. Only KOTs created after the page's first run on that computer are printed.
 - **Bills** print when an order is billed, and again from "Print bill" on a billed or paid order. If the page hasn't checked in during the last 30 seconds, the POS says the bill was not printed.
 - **Nothing is lost:** a ticket counts as printed only once QZ Tray accepts it. After an outage, unprinted KOTs from the last 12 hours and bills from the last 2 hours print.
 - **Reprint** on a kitchen ticket prints a copy marked `REPRINT`.

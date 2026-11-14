@@ -21,7 +21,7 @@ class KOTSerializer(serializers.ModelSerializer):
     items = KOTItemSerializer(many=True, read_only=True)
     table = serializers.CharField(source="order.table.label", default=None, read_only=True)
     order_type = serializers.CharField(source="order.order_type", read_only=True)
-    station_name = serializers.CharField(source="station.name", read_only=True)
+    station_name = serializers.CharField(source="station.name", default=None, read_only=True)
 
     class Meta:
         model = KOT

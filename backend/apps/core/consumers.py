@@ -1,7 +1,7 @@
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
 from .permissions import ALL_ROLES, FRONT_OF_HOUSE
-from .realtime import FLOOR_GROUP, KITCHEN_GROUP
+from .realtime import FLOOR_GROUP, KITCHEN_GROUP, PRINTER_GROUP
 
 
 class GroupConsumer(AsyncJsonWebsocketConsumer):
@@ -27,6 +27,10 @@ class GroupConsumer(AsyncJsonWebsocketConsumer):
 
 class KitchenConsumer(GroupConsumer):
     group = KITCHEN_GROUP
+
+
+class PrinterConsumer(GroupConsumer):
+    group = PRINTER_GROUP
 
 
 class FloorConsumer(GroupConsumer):

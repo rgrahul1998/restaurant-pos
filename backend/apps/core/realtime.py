@@ -3,6 +3,8 @@ from channels.layers import get_channel_layer
 
 KITCHEN_GROUP = "kitchen"
 FLOOR_GROUP = "floor"
+# The laptop's Printer page: told the moment a KOT or bill is waiting, so it prints at once.
+PRINTER_GROUP = "printer"
 
 
 def broadcast(group: str, event: str, payload: dict) -> None:

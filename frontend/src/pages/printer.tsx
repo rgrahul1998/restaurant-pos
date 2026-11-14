@@ -2,12 +2,14 @@ import qz from 'qz-tray'
 import { useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { useSocket } from '@/hooks/use-socket'
 import { api, post } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 /**
- * Runs on the laptop the thermal printers are plugged into. Every few seconds it asks
- * the server what is waiting, prints it through QZ Tray, and only then reports it as
+ * Runs on the laptop the thermal printers are plugged into. The server pings it over a
+ * websocket the moment a KOT or bill is waiting (and it checks every few seconds anyway,
+ * in case a ping is missed); it asks the server what is waiting, prints it through QZ Tray, and only then reports it as
  * printed, so an outage delays tickets instead of losing them.
  */
 
@@ -85,6 +87,9 @@ export function PrinterPage() {
   const [settings, setSettings] = useState(loadSettings)
   const [history, setHistory] = useState<{ label: string; time: string }[]>([])
   const [testing, setTesting] = useState(false)
+  // Set once this tab holds the printing lock: prints whatever is waiting, right now.
+  const printNow = useRef(() => {})
+  useSocket('/ws/printer/', () => printNow.current())
 
   // The polling loop outlives renders, so it reads the latest settings from a ref.
   const live = useRef(settings)
@@ -120,6 +125,7 @@ export function PrinterPage() {
 
   useEffect(() => {
     let busy = false
+    let again = false // a ping arrived mid-run: run once more when it finishes
     let refused = false
     let stopped = false
     // On paper but not yet recorded: printing these again would duplicate the ticket.
@@ -151,7 +157,11 @@ export function PrinterPage() {
     }
 
     const tick = async () => {
-      if (busy || refused || stopped) return
+      if (busy) {
+        again = true
+        return
+      }
+      if (refused || stopped) return
       busy = true
       try {
         await connect()
@@ -190,6 +200,10 @@ export function PrinterPage() {
         }
       } finally {
         busy = false
+        if (again) {
+          again = false
+          void tick()
+        }
       }
     }
 
@@ -202,6 +216,7 @@ export function PrinterPage() {
         URL.createObjectURL(new Blob([`setInterval(function(){postMessage(0)},${POLL_MS})`])),
       )
       timer.onmessage = tick
+      printNow.current = tick
       tick()
     }
 
@@ -227,6 +242,7 @@ export function PrinterPage() {
 
     return () => {
       stopped = true
+      printNow.current = () => {}
       timer?.terminate()
       release()
     }

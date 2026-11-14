@@ -2,7 +2,7 @@ from django.db import transaction
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
-from apps.core.realtime import KITCHEN_GROUP, broadcast
+from apps.core.realtime import KITCHEN_GROUP, PRINTER_GROUP, broadcast
 
 from .models import KOT
 from .serializers import KOTSerializer
@@ -20,3 +20,5 @@ def kot_changed(sender, instance, created, raw=False, **kwargs):
             KOTSerializer(instance).data,
         )
     )
+    if created:  # wake the Printer page now instead of on its next check
+        transaction.on_commit(lambda: broadcast(PRINTER_GROUP, "print.ready", {}))

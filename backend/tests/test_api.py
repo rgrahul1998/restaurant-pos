@@ -125,6 +125,29 @@ async def test_kitchen_socket_receives_kot(users, table, dish):
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
+async def test_printer_socket_is_pinged_for_new_kots(users, table, dish):
+    """The Printer page prints the moment it's pinged, not on its next check."""
+    from asgiref.sync import sync_to_async
+
+    token = AccessToken.for_user(users[Role.CASHIER])
+    socket = WebsocketCommunicator(application, f"/ws/printer/?token={token}", headers=ORIGIN)
+    connected, _ = await socket.connect()
+    assert connected
+
+    @sync_to_async
+    def fire():
+        from apps.orders.models import Order
+
+        order = Order.objects.create(table=table, waiter=users[Role.WAITER])
+        KOT.objects.create(order=order, created_by=users[Role.WAITER])
+
+    await fire()
+    assert (await socket.receive_json_from(timeout=3))["event"] == "print.ready"
+    await socket.disconnect()
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.asyncio
 async def test_socket_rejects_missing_token():
     socket = WebsocketCommunicator(application, "/ws/kitchen/", headers=ORIGIN)
     connected, code = await socket.connect()

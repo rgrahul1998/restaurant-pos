@@ -53,8 +53,9 @@ export interface KOT {
   order: number
   order_type: 'dine_in' | 'takeaway'
   table: string | null
-  station: number
-  station_name: string
+  /** Only older tickets have one: tickets now list every item. */
+  station: number | null
+  station_name: string | null
   type: 'new' | 'modified' | 'cancelled' | 'partially_cancelled' | 'duplicate'
   status: 'pending' | 'preparing' | 'ready' | 'served'
   note: string
@@ -71,7 +72,7 @@ export interface Course {
 export interface Category {
   id: number
   name: string
-  /** The kitchen station its KOTs go to; none means no ticket. */
+  /** Where its items are cooked. Every item prints on the KOT either way. */
   station: number | null
   sort_order: number
   is_active: boolean

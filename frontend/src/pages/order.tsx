@@ -1,9 +1,11 @@
+import { Dialog } from '@base-ui/react/dialog'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Minus, Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { JainTag } from '@/components/jain-tag'
+import { Field } from '@/components/sheet'
 import { PageState } from '@/components/page-state'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -157,7 +159,7 @@ export function OrderPage() {
           busy={run.isPending}
           mayBill={canBill(role)}
           onFire={() => act('fire')}
-          onBill={(discount, discount_type) => act('bill', { discount, discount_type })}
+          onBill={(body) => act('bill', body)}
           onCancel={() => window.confirm('Cancel this whole order?') && act('cancel')}
         />
       )}
@@ -506,11 +508,12 @@ function OpenActions(props: {
   busy: boolean
   mayBill: boolean
   onFire: () => void
-  onBill: (discount: string, type: 'amount' | 'percent') => void
+  onBill: (body: BillBody) => void
   onCancel: () => void
 }) {
   const [discount, setDiscount] = useState('')
   const [type, setType] = useState<'amount' | 'percent'>('percent')
+  const [confirming, setConfirming] = useState(false)
   const { order } = props
   const hasItems = order.items.some((i) => i.quantity > 0)
 
@@ -558,12 +561,24 @@ function OpenActions(props: {
               size="lg"
               className="h-11 flex-1"
               disabled={props.busy || !valid}
-              onClick={() => props.onBill(discount || '0', type)}
+              onClick={() => setConfirming(true)}
             >
               {valid ? `Bill ${money(subtotal - off)}` : 'Discount too high'}
             </Button>
           </div>
         )
+      )}
+      {confirming && (
+        <BillConfirm
+          order={order}
+          total={subtotal - off}
+          discount={off}
+          onClose={() => setConfirming(false)}
+          onConfirm={(customer) => {
+            setConfirming(false)
+            props.onBill({ discount: discount || '0', discount_type: type, ...customer })
+          }}
+        />
       )}
       {!order.has_unsent && hasItems && !props.mayBill && (
         <p className="text-center text-sm text-muted-foreground">
@@ -648,5 +663,99 @@ function PaymentForm(props: {
         </button>
       )}
     </form>
+  )
+}
+
+interface BillBody {
+  discount: string
+  discount_type: 'amount' | 'percent'
+  customer_name: string
+  customer_phone: string
+}
+
+/** Same rule as the server: 10 digits, ignoring spaces, dashes and a +91 / 0 prefix. */
+function mobileDigits(value: string): string | null {
+  let digits = value.replace(/\D/g, '')
+  if (!digits) return ''
+  if (digits.length === 12 && digits.startsWith('91')) digits = digits.slice(2)
+  else if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1)
+  return /^[6-9]\d{9}$/.test(digits) ? digits : null
+}
+
+/** "Are you sure?" before billing, and the one moment to note who the customer is. */
+function BillConfirm(props: {
+  order: Order
+  total: number
+  discount: number
+  onClose: () => void
+  onConfirm: (customer: { customer_name: string; customer_phone: string }) => void
+}) {
+  const { order } = props
+  const [name, setName] = useState(order.customer_name)
+  const [phone, setPhone] = useState(order.customer_phone)
+  const [touched, setTouched] = useState(false)
+  const digits = mobileDigits(phone)
+  const phoneError = digits === null && touched ? 'Enter a 10-digit mobile number, or leave it empty.' : ''
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault()
+    setTouched(true)
+    if (digits === null) return
+    props.onConfirm({ customer_name: name.trim(), customer_phone: digits })
+  }
+
+  return (
+    <Dialog.Root open onOpenChange={(open) => !open && props.onClose()}>
+      <Dialog.Portal>
+        <Dialog.Backdrop className="fixed inset-0 z-40 bg-foreground/20 transition-opacity data-[ending-style]:opacity-0 data-[starting-style]:opacity-0" />
+        <Dialog.Viewport className="fixed inset-0 z-50 grid place-items-center overflow-y-auto p-4">
+          <Dialog.Popup className="grid w-full max-w-sm gap-5 rounded-2xl border bg-background p-6 shadow-xl transition-[opacity,scale] data-[ending-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:scale-95 data-[starting-style]:opacity-0">
+            <div className="grid gap-1">
+              <Dialog.Title className="text-lg font-semibold tracking-tight">
+                Bill {order.table_name ?? 'takeaway'}?
+              </Dialog.Title>
+              <Dialog.Description className="text-sm text-muted-foreground">
+                Order #{order.id}
+                {props.discount > 0 && ` · ${money(props.discount)} off`}. The bill prints right away
+                and items can't be changed after this.
+              </Dialog.Description>
+            </div>
+            <p className="text-3xl font-semibold tracking-tight tabular-nums">{money(props.total)}</p>
+            <form id="bill-confirm" onSubmit={submit} className="grid gap-3">
+              <Field label="Customer name" hint="Optional">
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  maxLength={120}
+                  autoComplete="off"
+                  className="h-10"
+                />
+              </Field>
+              <Field label="Mobile number" hint={phoneError ? undefined : 'Optional. Saved for offers later.'}>
+                <Input
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  onBlur={() => setTouched(true)}
+                  inputMode="tel"
+                  autoComplete="off"
+                  placeholder="10-digit mobile"
+                  aria-invalid={phoneError ? true : undefined}
+                  className="h-10 tabular-nums"
+                />
+              </Field>
+              {phoneError && <p className="-mt-1 text-xs text-destructive">{phoneError}</p>}
+            </form>
+            <div className="grid grid-cols-2 gap-2">
+              <Dialog.Close render={<Button variant="outline" size="lg" className="h-11" />}>
+                Not yet
+              </Dialog.Close>
+              <Button type="submit" form="bill-confirm" size="lg" className="h-11">
+                Bill &amp; print
+              </Button>
+            </div>
+          </Dialog.Popup>
+        </Dialog.Viewport>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }

@@ -4,7 +4,6 @@ Every state change goes through here so table status, totals and kitchen tickets
 can never drift apart. Each function locks the order row for its transaction.
 """
 
-from collections import defaultdict
 from decimal import ROUND_HALF_UP, Decimal
 
 from django.db import transaction
@@ -132,30 +131,27 @@ def update_order(order_id, user, *, lines=(), **fields) -> Order:
 
 
 def _fire(order: Order, user) -> list[KOT]:
-    """Send the kitchen whatever changed since the last ticket, one ticket per station.
+    """Send the kitchen whatever changed since the last ticket, all items on one ticket.
 
     Each line remembers how much the kitchen already knows (`kot_quantity`), so only
     the difference travels: increases as a New/Modified ticket, decreases as a
-    cancellation ticket.
+    cancellation ticket. Every item is listed, whatever its category's station.
     """
-    items = list(order.items.select_related("menu_item__category__station"))
-    added, cancelled, live = defaultdict(list), defaultdict(list), defaultdict(int)
+    items = list(order.items.all())
+    added, cancelled = [], []
     for item in items:
-        station = item.menu_item.category.station
-        live[station] += item.quantity
         delta = item.quantity - item.kot_quantity
         if delta == 0:
             continue
-        if station:  # categories without a station (e.g. packaged drinks) need no ticket
-            if delta > 0:
-                added[station].append((item, delta, 0))
-            else:  # a cancellation line shows what the kitchen had and how much to drop
-                cancelled[station].append((item, item.kot_quantity, -delta))
+        if delta > 0:
+            added.append((item, delta, 0))
+        else:  # a cancellation line shows what the kitchen had and how much to drop
+            cancelled.append((item, item.kot_quantity, -delta))
         item.kot_quantity = item.quantity
         item.save(update_fields=["kot_quantity", "updated_at"])
 
-    def ticket(station, kind, lines):
-        kot = KOT.objects.create(order=order, station=station, type=kind, created_by=user)
+    def ticket(kind, lines):
+        kot = KOT.objects.create(order=order, type=kind, created_by=user)
         KOTItem.objects.bulk_create(
             KOTItem(
                 kot=kot,
@@ -171,13 +167,13 @@ def _fire(order: Order, user) -> list[KOT]:
         return kot
 
     kots = []
-    for station, lines in added.items():
-        seen = order.kots.filter(station=station).exists()
-        kind = KOT.Type.MODIFIED if seen else KOT.Type.NEW
-        kots.append(ticket(station, kind, lines))
-    for station, lines in cancelled.items():
-        kind = KOT.Type.PARTIALLY_CANCELLED if live[station] else KOT.Type.CANCELLED
-        kots.append(ticket(station, kind, lines))
+    if added:
+        kind = KOT.Type.MODIFIED if order.kots.exists() else KOT.Type.NEW
+        kots.append(ticket(kind, added))
+    if cancelled:
+        still_live = any(item.quantity for item in items)
+        kind = KOT.Type.PARTIALLY_CANCELLED if still_live else KOT.Type.CANCELLED
+        kots.append(ticket(kind, cancelled))
     return kots
 
 
@@ -201,8 +197,18 @@ def _close(order: Order, status: Order.Status):
 
 
 @transaction.atomic
-def bill(order_id, user, discount: Decimal = Decimal("0"), discount_type="amount") -> Order:
-    """`discount` is an amount, or a percentage of the subtotal for `discount_type="percent"`."""
+def bill(
+    order_id,
+    user,
+    discount: Decimal = Decimal("0"),
+    discount_type="amount",
+    customer_name: str | None = None,
+    customer_phone: str | None = None,
+) -> Order:
+    """`discount` is an amount, or a percentage of the subtotal for `discount_type="percent"`.
+
+    The customer's name and mobile, when given, are saved on the order; None leaves them.
+    """
     order = _lock(order_id)
     _require(order, Order.Status.OPEN, "This order has already been billed or closed.")
     items = list(order.items.all())
@@ -219,6 +225,10 @@ def bill(order_id, user, discount: Decimal = Decimal("0"), discount_type="amount
     elif discount > order.subtotal:
         raise ValidationError({"discount": "The discount can't be more than the bill."})
     order.discount = discount
+    if customer_name is not None:
+        order.customer_name = customer_name
+    if customer_phone is not None:
+        order.customer_phone = customer_phone
     order.cashier = user
     order.status = Order.Status.BILLED
     order.recalculate()
@@ -293,7 +303,7 @@ def cancel(order_id, user) -> Order:
     for item in order.items.all():
         item.quantity = 0
         item.save(update_fields=["quantity", "updated_at"])
-    _fire(order, user)  # tells each station to stop
+    _fire(order, user)  # tells the kitchen to stop
     _retotal(order)
     _close(order, Order.Status.CANCELLED)
     return order

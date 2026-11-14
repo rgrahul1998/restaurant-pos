@@ -100,6 +100,26 @@ class BillSerializer(serializers.Serializer):
         max_digits=12, decimal_places=2, min_value=Decimal("0"), default=Decimal("0")
     )
     discount_type = serializers.ChoiceField(choices=["amount", "percent"], default="amount")
+    # Asked when billing, both optional: kept on the order for promotions later.
+    # Left out of the request: the order keeps what it has (e.g. from a reservation).
+    customer_name = serializers.CharField(max_length=120, allow_blank=True, required=False)
+    customer_phone = serializers.CharField(max_length=20, allow_blank=True, required=False)
+
+    def validate_customer_name(self, value):
+        return " ".join(value.split())
+
+    def validate_customer_phone(self, value):
+        """A 10-digit Indian mobile number; spaces, dashes and a +91 / 0 prefix are dropped."""
+        digits = "".join(c for c in value if c.isdigit())
+        if not digits:
+            return ""
+        if len(digits) == 12 and digits.startswith("91"):
+            digits = digits[2:]
+        elif len(digits) == 11 and digits.startswith("0"):
+            digits = digits[1:]
+        if len(digits) != 10 or digits[0] not in "6789":
+            raise serializers.ValidationError("Enter a 10-digit mobile number.")
+        return digits
 
 
 class TransferSerializer(serializers.Serializer):

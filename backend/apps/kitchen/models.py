@@ -19,7 +19,11 @@ class Station(TimeStampedModel):
 
 
 class KOT(TimeStampedModel):
-    """Kitchen Order Ticket: one batch of an order's items fired to one station."""
+    """Kitchen Order Ticket: one batch of an order's items sent to the kitchen together.
+
+    Tickets from "Send to kitchen" list every item and have no station; older tickets
+    were split per station and keep theirs.
+    """
 
     class Type(models.TextChoices):
         NEW = "new", "New Order"
@@ -35,7 +39,9 @@ class KOT(TimeStampedModel):
         SERVED = "served", "Served"
 
     order = models.ForeignKey("orders.Order", on_delete=models.CASCADE, related_name="kots")
-    station = models.ForeignKey(Station, on_delete=models.PROTECT, related_name="kots")
+    station = models.ForeignKey(
+        Station, on_delete=models.PROTECT, null=True, blank=True, related_name="kots"
+    )
     type = models.CharField(max_length=20, choices=Type.choices, default=Type.NEW)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
     # For Modified / Cancelled tickets: the ticket this one amends.

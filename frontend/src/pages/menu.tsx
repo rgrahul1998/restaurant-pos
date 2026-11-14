@@ -75,14 +75,14 @@ export function MenuPage() {
         <ItemsTab {...data} onOpen={(item) => setPanel({ kind: 'item', item })} />
       ) : tab === 'categories' ? (
         <SimpleList
-          empty="No categories yet. Items are grouped by category, and each category sends its tickets to one kitchen station."
+          empty="No categories yet. Items are grouped by category, and each category can name the kitchen station that cooks it."
           rows={data.categories.map((c) => {
             const count = data.items.filter((i) => i.category === c.id).length
             const station = data.stations.find((s) => s.id === c.station)
             return {
               id: c.id,
               title: c.name,
-              detail: `${count} ${count === 1 ? 'item' : 'items'} · ${station ? `Tickets to ${station.name}` : 'No kitchen ticket'}`,
+              detail: `${count} ${count === 1 ? 'item' : 'items'} · ${station ? station.name : 'No station'}`,
               off: c.is_active ? undefined : 'Hidden',
               onOpen: () => setPanel({ kind: 'category', category: c }),
             }
@@ -103,7 +103,7 @@ export function MenuPage() {
         />
       ) : (
         <SimpleList
-          empty="No kitchen stations yet. A station is a place in the kitchen that gets its own tickets, like Grill or Bar."
+          empty="No kitchen stations yet. A station is a place in the kitchen, like Grill or Bar."
           rows={data.stations.map((s) => {
             const names = data.categories.filter((c) => c.station === s.id).map((c) => c.name)
             return {
@@ -573,7 +573,7 @@ function CategoryForm(props: { category?: Category; stations: Station[]; onDone:
       <Field label="Name">
         <Input autoFocus={!editing} value={name} onChange={(e) => setName(e.target.value)} />
       </Field>
-      <Field label="Kitchen station" hint="Where its items' tickets go. None means no ticket, e.g. bottled drinks.">
+      <Field label="Kitchen station" hint="Where its items are cooked. Every item prints on the KOT either way.">
         <Select
           label="Kitchen station"
           value={station}

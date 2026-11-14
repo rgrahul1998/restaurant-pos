@@ -54,7 +54,8 @@ export function KitchenPage() {
   if (kots.isPending) return <PageState>Loading…</PageState>
   if (kots.isError) return <PageState error>Could not load tickets.</PageState>
 
-  const shown = kots.data.filter((k) => station === null || k.station === station)
+  // Tickets list every item, so they show on every station's screen.
+  const shown = kots.data.filter((k) => station === null || k.station === null || k.station === station)
 
   return (
     <div className="grid gap-5">
@@ -92,7 +93,7 @@ export function KitchenPage() {
               <div>
                 <h2 className="text-lg font-semibold tracking-tight">{kot.table ?? 'Takeaway'}</h2>
                 <p className="text-xs text-muted-foreground">
-                  {kot.station_name} · #{kot.order} · {time(kot.created_at)}
+                  {[kot.station_name, `#${kot.order}`, time(kot.created_at)].filter(Boolean).join(' · ')}
                 </p>
               </div>
               <span

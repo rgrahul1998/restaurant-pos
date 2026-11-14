@@ -50,10 +50,9 @@ def line(order, name):
 
 
 def tickets(order):
-    """Per ticket: station, type, and how much of each item it adds or cancels."""
+    """Per ticket: type, and how much of each item it adds or cancels."""
     return [
         (
-            k.station.name,
             k.type,
             [(i.name, i.cancelled_quantity or i.quantity) for i in k.items.all()],
         )
@@ -70,10 +69,8 @@ def test_full_dine_in_flow(api, table, menu):
     assert waiter.get(f"/api/tables/{table.id}/").data["active_order"] == order["id"]
 
     assert waiter.post(url + "fire/").data["has_unsent"] is False
-    assert sorted(tickets(order)) == [
-        ("Bar", "new", [("Soda", 1)]),
-        ("Grill", "new", [("Tikka", 2)]),
-    ]
+    # One ticket for everything sent, whichever station cooks it.
+    assert tickets(order) == [("new", [("Tikka", 2), ("Soda", 1)])]
 
     assert waiter.post(url + "bill/").status_code == 403  # waiters don't bill
     billed = cashier.post(url + "bill/", {"discount": "90.00"}).data
@@ -112,11 +109,11 @@ def test_refire_sends_only_the_difference(api, table, menu):
     order = waiter.patch(url, {"lines": lines}, format="json").data
     assert order["has_unsent"] is True
     order = waiter.post(url + "fire/").data
+    # Water has no station but is on the ticket too: every item prints.
     assert tickets(order) == [
-        ("Grill", "new", [("Tikka", 1)]),
-        ("Grill", "modified", [("Tikka", 2), ("Kebab", 1)]),
+        ("new", [("Tikka", 1)]),
+        ("modified", [("Tikka", 2), ("Kebab", 1), ("Water", 2)]),
     ]
-    # Water has no station: no ticket, but it still counts as sent.
     assert order["has_unsent"] is False
 
 
@@ -131,12 +128,12 @@ def test_cancelling_sent_items_needs_a_manager(api, table, menu):
     assert waiter.patch(url, reduce, format="json").status_code == 403
     assert manager.patch(url, reduce, format="json").data["total"] == "550.00"
     manager.post(url + "fire/")
-    assert tickets(order)[-1] == ("Grill", "partially_cancelled", [("Tikka", 1)])
+    assert tickets(order)[-1] == ("partially_cancelled", [("Tikka", 1)])
 
     remove_all = {"lines": [{"id": tikka, "quantity": 0}, {"id": kebab, "quantity": 0}]}
     manager.patch(url, remove_all, format="json")
     manager.post(url + "fire/")
-    assert tickets(order)[-1] == ("Grill", "cancelled", [("Tikka", 1), ("Kebab", 1)])
+    assert tickets(order)[-1] == ("cancelled", [("Tikka", 1), ("Kebab", 1)])
 
 
 def test_unsent_lines_can_be_removed_by_anyone(api, table, menu):
@@ -174,7 +171,7 @@ def test_cancel_order(api, table, menu):
     cancelled = manager.post(url + "cancel/").data
     table.refresh_from_db()
     assert (cancelled["status"], cancelled["total"], table.status) == ("cancelled", "0.00", "free")
-    assert tickets(order)[-1] == ("Grill", "cancelled", [("Tikka", 2)])
+    assert tickets(order)[-1] == ("cancelled", [("Tikka", 2)])
 
 
 def test_takeaway_and_unavailable_item(api, menu):
@@ -203,3 +200,25 @@ def test_percent_discount(api, table, menu):
     # 100% off leaves nothing to collect, so the order closes straight away.
     free = cashier.post(url + "bill/", {"discount": "100", "discount_type": "percent"}).data
     assert (free["total"], free["status"]) == ("0.00", "paid")
+
+
+def test_bill_saves_optional_customer_details(api, table, menu):
+    cashier = api(Role.CASHIER)
+    order = open_order(cashier, table, lines=[(menu["tikka"], 1)])
+    url = f"/api/orders/{order['id']}/"
+    cashier.post(url + "fire/")
+
+    bad = cashier.post(url + "bill/", {"customer_phone": "12345"})
+    assert bad.status_code == 400 and "customer_phone" in bad.data
+    billed = cashier.post(
+        url + "bill/", {"customer_name": "  Priya   Shah ", "customer_phone": "+91 98200-12345"}
+    ).data
+    assert (billed["customer_name"], billed["customer_phone"]) == ("Priya Shah", "9820012345")
+
+    # Both are optional, and leaving them out keeps what the order already has.
+    cashier.post(url + "reopen/")
+    billed = cashier.post(url + "bill/").data
+    assert (billed["customer_name"], billed["customer_phone"]) == ("Priya Shah", "9820012345")
+    cashier.post(url + "reopen/")
+    billed = cashier.post(url + "bill/", {"customer_name": "", "customer_phone": ""}).data
+    assert (billed["customer_name"], billed["customer_phone"]) == ("", "")

@@ -13,6 +13,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
+from apps.core.realtime import PRINTER_GROUP, broadcast
 from apps.kitchen.models import KOT, KOTItem
 from apps.orders.models import Order
 
@@ -27,6 +28,9 @@ PAGE_ALIVE_KEY = "printing:page-alive"
 PAGE_ALIVE_SECONDS = 30
 
 # The ticket builder keeps the vocabulary of the app it was ported from.
+# Cancellations and reduced quantities reach the kitchen screen but are never printed.
+NOT_PRINTED = [KOT.Type.CANCELLED, KOT.Type.PARTIALLY_CANCELLED]
+
 KOT_TYPE = {
     KOT.Type.NEW: "New Order",
     KOT.Type.MODIFIED: "Order Modified",
@@ -65,7 +69,7 @@ def kot_data(kot: KOT) -> dict:
         **_stamp(kot.created_at),
         "name": f"KOT-{kot.pk}",
         "type": KOT_TYPE[kot.type],
-        "production": kot.station.name,
+        "production": kot.station.name if kot.station else None,
         "invoice": kot.order_id,
         "table_takeaway": kot.order.table is None,
         "comments": kot.note,
@@ -141,6 +145,7 @@ def pending(since, width: int) -> list[dict]:
             KOT.objects.filter(
                 created_at__gte=max(since, now - KOT_CATCH_UP), print_log__isnull=True
             )
+            .exclude(type__in=NOT_PRINTED)
             .select_related("order__table", "station", "created_by")
             .prefetch_related("items", "order__table__merged_tables")
             .order_by("created_at")[:BATCH_SIZE]
@@ -205,6 +210,8 @@ def queue_bill(order: Order, user) -> BillPrintJob:
     job, _ = BillPrintJob.objects.get_or_create(
         order=order, status=BillPrintJob.Status.PENDING, defaults={"requested_by": user}
     )
+    # Wake the Printer page now instead of on its next check.
+    transaction.on_commit(lambda: broadcast(PRINTER_GROUP, "print.ready", {}))
     return job
 
 
