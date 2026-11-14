@@ -1,0 +1,41 @@
+[project]
+name = "restaurant-pos"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "channels-redis>=4.3.0",
+    "channels[daphne]>=4.3.2",
+    "cryptography>=50.0.2",
+    "django>=5.2,<6",
+    "django-cors-headers>=4.9.0",
+    "django-environ>=0.14.0",
+    "django-filter>=26.2",
+    "django-simple-history>=3.13.0",
+    "django-unfold>=0.110.1",
+    "djangorestframework>=3.18.3",
+    "djangorestframework-simplejwt>=5.5.1",
+    "drf-spectacular>=0.30.0",
+    "pillow>=13.0.0",
+    "psycopg[binary]>=3.3.9",
+    "redis>=8.1.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.5.0",
+    "pytest-django>=4.14.0",
+    "ruff>=0.17.5",
+]
+
+[tool.ruff]
+line-length = 100
+extend-exclude = ["migrations"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "DJ"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+python_files = ["test_*.py"]
+asyncio_default_fixture_loop_scope = "function"

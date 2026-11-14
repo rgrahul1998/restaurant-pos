@@ -1,0 +1,21 @@
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+backend/.env
+backend/staticfiles/
+backend/media/
+backend/backups/
+
+# node
+node_modules/
+frontend/dist/
+*.log
+
+.DS_Store
+
+# QZ Tray signing keys
+*.pem
+pos-backup-*.zip
