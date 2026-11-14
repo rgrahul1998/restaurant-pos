@@ -201,6 +201,23 @@ open **Printer** in the POS and pick the KOT and bill printers. See [Printing](#
   ```
 - Point `BACKUP_DIR` at a second disk or a synced folder, so backups survive the machine.
 
+### Google Cloud
+
+`deploy/` runs the whole stack on one Compute Engine VM with Docker Compose: Postgres, Redis,
+Daphne, the backup worker, and Caddy, which serves the frontend and gets an HTTPS certificate
+automatically. Images are built locally and pushed to Artifact Registry. Backups are copied to a
+Cloud Storage bucket every hour and kept there for 30 days.
+
+```bash
+deploy/deploy.sh               # build, push and restart the current commit
+deploy/deploy.sh --provision   # first time only: also installs Docker and the backup copy
+```
+
+Defaults: project `restaurant-pos-rg`, `asia-south1-a`, VM `pos`. Override them with `PROJECT`, `ZONE`,
+`VM`, or set `SITE_HOST=pos.example.com` to use your own domain (point its A record at the VM's static
+IP first). Without one, the site is `https://<ip-with-dashes>.sslip.io`. The server's secrets live in
+`/opt/pos/.env`, generated on the first deploy.
+
 ### Checks
 
 ```bash

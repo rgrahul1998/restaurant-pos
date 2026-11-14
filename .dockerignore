@@ -1,0 +1,15 @@
+.git
+**/node_modules
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+frontend/dist
+backend/.env
+backend/certs
+backend/backups
+backend/media
+backend/staticfiles
+*.pem
+pos-backup-*.zip
+docs

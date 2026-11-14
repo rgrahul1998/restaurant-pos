@@ -1,0 +1,21 @@
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	handle_path /static/* {
+		root * /srv/static
+		file_server
+	}
+	handle_path /media/* {
+		root * /srv/media
+		file_server
+	}
+	@backend path /api/* /ws/* /admin/*
+	handle @backend {
+		reverse_proxy backend:8000
+	}
+	handle {
+		root * /srv/app
+		try_files {path} /index.html
+		file_server
+	}
+}
