@@ -45,3 +45,24 @@ class KOTSerializer(serializers.ModelSerializer):
         # The kitchen only moves a ticket through its statuses; tickets themselves
         # are created by the order flow.
         read_only_fields = [f for f in fields if f != "status"]
+
+
+class CookingInstructionsSerializer(serializers.Serializer):
+    instructions = serializers.ListField(
+        child=serializers.CharField(max_length=60, allow_blank=True), max_length=100
+    )
+
+    def validate_instructions(self, value):
+        # Trimmed, blanks dropped, duplicates (any case) kept once. Commas would split
+        # the saved note into separate chips, so they aren't allowed inside one.
+        seen, out = set(), []
+        for text in value:
+            text = " ".join(text.split())
+            if "," in text:
+                raise serializers.ValidationError(
+                    f"“{text}”: use separate instructions, not commas."
+                )
+            if text and text.lower() not in seen:
+                seen.add(text.lower())
+                out.append(text)
+        return out

@@ -540,19 +540,16 @@ function Lines(props: {
   )
 }
 
-/** Common cooking instructions, one tap each; anything else can be typed. Printed on the KOT only. */
-const QUICK_NOTES = [
-  '1 by 2',
-  'Soft',
-  'Crispy',
-  'Extra crispy',
-  'Spicy',
-  'Extra spicy',
-  'Less spicy',
-  'Less oil',
-  'No onion',
-  'No garlic',
-]
+/** Settings → Cooking instructions: one tap each; anything else can be typed. Printed on the KOT only. */
+function useQuickNotes() {
+  return (
+    useQuery({
+      queryKey: ['settings', 'cooking-instructions'],
+      queryFn: () => api<{ instructions: string[] }>('/settings/cooking-instructions/'),
+      staleTime: 5 * 60_000,
+    }).data?.instructions ?? []
+  )
+}
 
 const joinNotes = (parts: string[]) => parts.join(', ').slice(0, 255)
 const splitNote = (note: string) =>
@@ -609,6 +606,7 @@ function ItemRate(props: { item: OrderItem; busy: boolean; onSave: (unitPrice: s
 
 /** Special instructions for one line, editable until the kitchen has it. */
 function ItemNote(props: { note: string; busy: boolean; onSave: (note: string) => void }) {
+  const quickNotes = useQuickNotes()
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState(props.note)
 
@@ -652,8 +650,9 @@ function ItemNote(props: { note: string; busy: boolean; onSave: (note: string) =
 
   return (
     <div className="col-span-2 mt-2 grid gap-2 rounded-lg border bg-muted/30 p-2.5">
+      {quickNotes.length > 0 && (
       <div className="flex flex-wrap gap-1.5">
-        {QUICK_NOTES.map((quick) => {
+        {quickNotes.map((quick) => {
           const on = picked.some((p) => p.toLowerCase() === quick.toLowerCase())
           return (
             <button
@@ -673,6 +672,7 @@ function ItemNote(props: { note: string; busy: boolean; onSave: (note: string) =
           )
         })}
       </div>
+      )}
       <Input
         autoFocus
         value={draft}

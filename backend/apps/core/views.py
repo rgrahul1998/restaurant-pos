@@ -11,7 +11,9 @@ from rest_framework.views import APIView
 
 from apps.core import backup, scheduler
 from apps.core.models import BackupSettings
-from apps.core.permissions import role_permission
+from apps.core.permissions import ALL_ROLES, role_permission
+from apps.kitchen.models import KitchenSettings
+from apps.kitchen.serializers import CookingInstructionsSerializer
 from apps.printing.models import PrintSettings, Restaurant
 from apps.printing.serializers import PrintSettingsSerializer, RestaurantSerializer
 from apps.users.models import Role
@@ -127,6 +129,25 @@ class RestaurantSettingsView(APIView):
         body.is_valid(raise_exception=True)
         body.save()
         return Response(body.data)
+
+
+class CookingInstructionsView(APIView):
+    """Settings → Cooking instructions: every role reads the list (the order screen shows it);
+    only Admin changes it."""
+
+    permission_classes = [role_permission(read=ALL_ROLES, write={Role.ADMIN})]
+    serializer_class = CookingInstructionsSerializer
+
+    def get(self, request):
+        return Response({"instructions": KitchenSettings.load().cooking_instructions})
+
+    def put(self, request):
+        body = CookingInstructionsSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+        kitchen = KitchenSettings.load()
+        kitchen.cooking_instructions = body.validated_data["instructions"]
+        kitchen.save()
+        return Response({"instructions": kitchen.cooking_instructions})
 
 
 class PrintSettingsView(APIView):

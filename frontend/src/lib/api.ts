@@ -99,6 +99,9 @@ export const post = <T>(path: string, body?: unknown) =>
 export const patch = <T>(path: string, body: unknown) =>
   api<T>(path, { method: 'PATCH', body: JSON.stringify(body) })
 
+export const put = <T>(path: string, body: unknown) =>
+  api<T>(path, { method: 'PUT', body: JSON.stringify(body) })
+
 export const remove = (path: string) => api<null>(path, { method: 'DELETE' })
 
 /** POST or PATCH as multipart, for requests that carry a file. */
