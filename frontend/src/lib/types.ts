@@ -148,7 +148,7 @@ export interface Order {
 /** A cart change: add a menu item, or edit an existing line by id. */
 export type OrderLine =
   | { menu_item: number; quantity?: number; note?: string; is_jain?: boolean }
-  | { id: number; quantity?: number; note?: string }
+  | { id: number; quantity?: number; note?: string; unit_price?: string }
 
 export interface Station {
   id: number

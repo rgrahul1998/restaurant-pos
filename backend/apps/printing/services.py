@@ -90,14 +90,15 @@ def kot_data(kot: KOT) -> dict:
 
 
 def _bill_lines(order: Order) -> list[dict]:
-    """One bill line per dish. Rows split only by cooking instruction merge back together;
-    Jain and regular portions, and rows at different prices, stay apart."""
+    """One bill line per dish: rows split by cooking instruction or Jain/regular merge back
+    together (the Jain mark is for the kitchen). Rows charged at a different rate, like a
+    half portion, stay apart so each line's rate adds up."""
     lines: dict[tuple, dict] = {}
     for item in order.items.all():
         if not item.quantity:
             continue
-        key = (item.menu_item_id, item.name, item.is_jain, item.unit_price)
-        line = lines.setdefault(key, {"item_name": jain_name(item), "qty": 0, "amount": 0})
+        key = (item.menu_item_id, item.name, item.unit_price)
+        line = lines.setdefault(key, {"item_name": item.name, "qty": 0, "amount": 0})
         line["qty"] += item.quantity
         line["amount"] += item.line_total
     return list(lines.values())

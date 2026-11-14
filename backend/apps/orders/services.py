@@ -86,7 +86,8 @@ def _apply_lines(order: Order, lines: list[dict], user):
                 item.delete()
                 continue
             item.quantity, item.note = quantity, note
-            item.save(update_fields=["quantity", "note", "updated_at"])
+            item.unit_price = line.get("unit_price", item.unit_price)
+            item.save(update_fields=["quantity", "note", "unit_price", "updated_at"])
         else:
             menu_item = line["menu_item"]
             if not menu_item.is_available:

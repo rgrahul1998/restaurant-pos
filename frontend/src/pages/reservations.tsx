@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, Phone, Plus } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { PageState } from '@/components/page-state'
@@ -253,6 +253,19 @@ function DayView(props: {
   const now = (loadedAt - dayStart.getTime()) / 3_600_000
   const showNow = now > first && now < last
 
+  // On a narrow screen only a few hours show: open at the current time on today, else at
+  // the first booking, instead of at 10 am.
+  const scroller = useRef<HTMLDivElement>(null)
+  const firstBooking = live.length ? Math.min(...live.map((b) => hourOf(b.start_at))) : first
+  const focus = Math.max(first, (showNow ? now : firstBooking) - 1)
+  useEffect(() => {
+    const el = scroller.current
+    const track = el?.querySelector<HTMLElement>('[data-track]')
+    if (!el || !track) return
+    // The table names stay pinned on the left, so this puts `focus` just right of them.
+    el.scrollLeft = ((focus - first) / span) * track.offsetWidth
+  }, [props.day, focus, first, span])
+
   const slotAt = (e: React.MouseEvent<HTMLDivElement>) => {
     const box = e.currentTarget.getBoundingClientRect()
     const hour = first + ((e.clientX - box.left) / box.width) * span
@@ -262,11 +275,11 @@ function DayView(props: {
   }
 
   return (
-    <div className="overflow-x-auto rounded-2xl border">
+    <div ref={scroller} className="overflow-x-auto rounded-2xl border">
       <div className="min-w-[48rem] sm:min-w-[56rem]">
         <div className="grid grid-cols-[4.5rem_1fr] border-b bg-background sm:grid-cols-[8rem_1fr]">
           <div className="sticky left-0 z-[3] border-r bg-background" />
-          <div className="relative h-9">
+          <div data-track className="relative h-9">
             {hours.map((h) => (
               <span
                 key={h}

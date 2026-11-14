@@ -31,10 +31,16 @@ class OrderLineSerializer(serializers.Serializer):
     quantity = serializers.IntegerField(min_value=0, max_value=999, required=False)
     note = serializers.CharField(max_length=255, allow_blank=True, required=False)
     is_jain = serializers.BooleanField(required=False, help_text="New lines only.")
+    unit_price = serializers.DecimalField(
+        max_digits=10, decimal_places=2, min_value=Decimal("0"), required=False,
+        help_text="Existing lines only: charge a different rate, e.g. a half portion.",
+    )  # fmt: skip
 
     def validate(self, attrs):
         if ("id" in attrs) == ("menu_item" in attrs):
             raise serializers.ValidationError("Send either `id` or `menu_item`.")
+        if "unit_price" in attrs and "id" not in attrs:
+            raise serializers.ValidationError("A new line takes the menu price.")
         if attrs.get("is_jain") and "menu_item" in attrs and not attrs["menu_item"].has_jain:
             raise serializers.ValidationError(f"{attrs['menu_item'].name} has no Jain option.")
         return attrs

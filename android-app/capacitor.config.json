@@ -1,9 +1,0 @@
-{
-  "appId": "com.restaurantpos.app",
-  "appName": "Restaurant POS",
-  "webDir": "www",
-  "server": {
-    "url": "https://34-93-36-245.sslip.io",
-    "errorPath": "offline.html"
-  }
-}

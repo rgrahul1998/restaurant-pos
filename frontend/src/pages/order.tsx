@@ -1,8 +1,8 @@
 import { Dialog } from '@base-ui/react/dialog'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { MessageSquareText, Minus, Plus } from 'lucide-react'
+import { ChevronLeft, MessageSquareText, Minus, Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { JainTag } from '@/components/jain-tag'
 import { Field } from '@/components/sheet'
@@ -38,6 +38,14 @@ export function OrderPage() {
   const location = useLocation()
   const queryClient = useQueryClient()
   const [error, setError] = useState('')
+  // Phones and portrait tablets show the menu or the cart, not both.
+  const [pane, setPane] = useState<'menu' | 'cart'>('menu')
+  // Back is wherever the waiter came from (usually the floor), like Android's back button.
+  // Opened from a link with no history: a table's order goes to the floor, takeaway to orders.
+  const goBack = (o?: Order) => {
+    if (location.key !== 'default') navigate(-1)
+    else navigate((o?.table ?? tableId) ? '/floor' : '/orders', { replace: true })
+  }
 
   const order = useQuery({
     queryKey: ['order', orderId],
@@ -80,9 +88,13 @@ export function OrderPage() {
         `/orders/${orderId}/${name}/`,
         name === 'fire' && canPrintHere ? { print_here: true } : body,
       )
-      if (fresh.print?.length) setNotice((await printHere(fresh.print)) ?? '')
+      const failed = fresh.print?.length ? await printHere(fresh.print) : null
+      setNotice(failed ?? '')
       // Billing prints the bill. A printing problem is reported but doesn't undo the bill.
       if (name === 'bill') await printBill()
+      // A waiter is done once the kitchen has it: back to the tables. Not if the KOT
+      // didn't print, so they see why.
+      if (name === 'fire' && !failed && !canBill(role)) goBack(fresh)
       return fresh
     })
   const [notice, setNotice] = useState('')
@@ -196,49 +208,78 @@ export function OrderPage() {
           {notice && <p className="text-sm text-muted-foreground">{notice}</p>}
         </div>
       )}
-      {(status === 'paid' || status === 'cancelled') &&
-        // Closed orders are usually opened from history; go back there with its filters.
-        (location.key !== 'default' ? (
-          <button
-            onClick={() => navigate(-1)}
-            className="text-center text-sm text-muted-foreground hover:text-foreground"
-          >
-            Back
-          </button>
-        ) : (
-          <Link to="/floor" className="text-center text-sm text-muted-foreground hover:text-foreground">
-            Back to floor
-          </Link>
-        ))}
     </>
   )
 
   const panel = 'grid gap-5 rounded-2xl border bg-background p-5'
+  const count = items.reduce((n, i) => n + i.quantity, 0)
 
-  // Taking an order: the menu fills the screen and the cart sits on the right.
+  // Back, the table, and on narrow screens the Menu / Cart switch. Sticks under the header.
+  const topBar = (
+    <div className="sticky top-14 z-10 -mx-4 -mt-6 flex items-center gap-2 border-b bg-background/95 px-4 py-2 backdrop-blur sm:-mx-8 sm:px-8 lg:static lg:mx-0 lg:mt-0 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
+      <button
+        onClick={() => goBack(current)}
+        className="-ml-2 inline-flex h-11 items-center gap-0.5 rounded-lg pr-3 pl-1 text-sm font-medium hover:bg-muted"
+      >
+        <ChevronLeft className="size-5" />
+        Back
+      </button>
+      <span className="min-w-0 truncate text-sm text-muted-foreground lg:hidden">{title}</span>
+      {status === 'open' && (
+        <div className="ml-auto grid grid-cols-2 gap-1 rounded-xl bg-muted p-1 lg:hidden">
+          {(['menu', 'cart'] as const).map((p) => (
+            <button
+              key={p}
+              aria-pressed={pane === p}
+              onClick={() => setPane(p)}
+              className={cn(
+                'h-9 rounded-lg px-4 text-sm font-medium transition-colors',
+                pane === p ? 'bg-background shadow-sm' : 'text-muted-foreground',
+              )}
+            >
+              {p === 'menu' ? 'Menu' : `Cart${count ? ` · ${count}` : ''}`}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+
+  // Taking an order: the menu fills the screen and the cart sits on the right. Narrower,
+  // one of them at a time.
   if (status === 'open')
     return (
-      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 pb-20 lg:grid-cols-[minmax(0,1fr)_26rem] lg:pb-0">
-        <MenuPicker items={items} onAdd={(m, jain) => add(m.id, jain)} busy={run.isPending} />
-        <aside id="cart" className={cn(panel, 'scroll-mt-20 lg:sticky lg:top-20')}>
-          {summary}
-          {actions}
-        </aside>
-        <CartBar items={items} total={current?.total} />
+      <div className="grid gap-4 lg:gap-6">
+        {topBar}
+        <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 pb-20 lg:grid-cols-[minmax(0,1fr)_26rem] lg:pb-0">
+          <div className={cn(pane === 'cart' && 'max-lg:hidden')}>
+            <MenuPicker items={items} onAdd={(m, jain) => add(m.id, jain)} busy={run.isPending} />
+          </div>
+          <aside id="cart" className={cn(panel, 'lg:sticky lg:top-20', pane === 'menu' && 'max-lg:hidden')}>
+            {summary}
+            {actions}
+          </aside>
+          {pane === 'menu' && (
+            <CartBar items={items} total={current?.total} onView={() => setPane('cart')} />
+          )}
+        </div>
       </div>
     )
 
   // Billed, paid or cancelled: the bill (receipt width) beside payment and printing.
   return (
-    <div className="mx-auto grid w-full max-w-[68rem] grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[minmax(0,1fr)_26rem]">
-      <section className={panel}>{summary}</section>
-      <aside className={cn(panel, 'lg:sticky lg:top-20')}>{actions}</aside>
+    <div className="mx-auto grid w-full max-w-[68rem] gap-4 lg:gap-6">
+      {topBar}
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[minmax(0,1fr)_26rem]">
+        <section className={panel}>{summary}</section>
+        <aside className={cn(panel, 'lg:sticky lg:top-20')}>{actions}</aside>
+      </div>
     </div>
   )
 }
 
-/** Phones and tablets: the cart is below the menu, so this bar keeps it one tap away. */
-function CartBar({ items, total }: { items: OrderItem[]; total?: string }) {
+/** Phones and portrait tablets: while the menu shows, this keeps the cart one tap away. */
+function CartBar({ items, total, onView }: { items: OrderItem[]; total?: string; onView: () => void }) {
   const count = items.reduce((n, i) => n + i.quantity, 0)
   const unsent = items.reduce((n, i) => n + Math.max(i.quantity - i.kot_quantity, 0), 0)
   if (count === 0) return null
@@ -252,11 +293,8 @@ function CartBar({ items, total }: { items: OrderItem[]; total?: string }) {
           </p>
           {unsent > 0 && <p className="text-xs text-amber-700">{unsent} not sent to the kitchen</p>}
         </div>
-        <Button
-          size="lg"
-          onClick={() => document.getElementById('cart')?.scrollIntoView({ behavior: 'smooth' })}
-        >
-          View order
+        <Button size="lg" className="h-11" onClick={onView}>
+          View cart
         </Button>
       </div>
     </div>
@@ -433,7 +471,15 @@ function Lines(props: {
                 {item.is_jain && <JainTag />}
               </p>
               <p className="text-xs text-muted-foreground tabular-nums">
-                {money(item.line_total)}
+                {props.editable && item.quantity > 0 ? (
+                  <ItemRate
+                    item={item}
+                    busy={props.busy}
+                    onSave={(unit_price) => props.onChange([{ id: item.id, unit_price }])}
+                  />
+                ) : (
+                  money(item.line_total)
+                )}
                 {unsent !== 0 && (
                   <span className={unsent > 0 ? 'text-amber-600' : 'text-destructive'}>
                     {' · '}
@@ -514,6 +560,52 @@ const splitNote = (note: string) =>
     .split(',')
     .map((p) => p.trim())
     .filter(Boolean)
+
+/** The line's amount; double-click (double-tap) to charge a different rate, e.g. a half portion. */
+function ItemRate(props: { item: OrderItem; busy: boolean; onSave: (unitPrice: string) => void }) {
+  const { item } = props
+  const [draft, setDraft] = useState<string | null>(null)
+
+  const save = () => {
+    const value = Number(draft)
+    setDraft(null)
+    if (draft?.trim() && Number.isFinite(value) && value >= 0 && value !== Number(item.unit_price))
+      props.onSave(value.toFixed(2))
+  }
+
+  if (draft === null)
+    return (
+      <span
+        onDoubleClick={() => !props.busy && setDraft(String(Number(item.unit_price)))}
+        title="Double-click to change the rate"
+        className="cursor-text select-none"
+      >
+        {money(item.line_total)}
+        {item.quantity > 1 && ` (${money(item.unit_price)} each)`}
+      </span>
+    )
+
+  return (
+    <span className="inline-flex items-center gap-1">
+      ₹
+      <input
+        autoFocus
+        inputMode="decimal"
+        aria-label={`Rate for ${item.name}`}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value.replace(/[^\d.]/g, ''))}
+        onFocus={(e) => e.target.select()}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur()
+          if (e.key === 'Escape') setDraft(null)
+        }}
+        className="h-7 w-20 rounded-md border bg-background px-2 text-sm text-foreground"
+      />
+      {item.quantity > 1 && 'each'}
+    </span>
+  )
+}
 
 /** Special instructions for one line, editable until the kitchen has it. */
 function ItemNote(props: { note: string; busy: boolean; onSave: (note: string) => void }) {

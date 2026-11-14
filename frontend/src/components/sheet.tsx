@@ -19,7 +19,7 @@ export function Sheet({ children, onClose }: { children: React.ReactNode; onClos
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
       <button aria-label="Close" className="absolute inset-0 bg-foreground/20" onClick={onClose} />
-      <aside className="relative flex h-full w-full max-w-md flex-col overflow-y-auto overscroll-contain bg-background p-6 shadow-xl">
+      <aside className="relative flex h-full w-full md:max-w-md flex-col overflow-y-auto overscroll-contain bg-background p-6 shadow-xl">
         <button
           aria-label="Close"
           onClick={onClose}

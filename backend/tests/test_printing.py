@@ -158,7 +158,7 @@ def test_test_ticket_and_unsigned_qz(api, settings):
     assert APIClient().get("/api/printing/pending/").status_code == 401
 
 
-def test_bill_merges_rows_split_only_by_cooking_instruction(api, order):
+def test_bill_merges_rows_split_by_instruction_or_jain(api, order):
     from apps.orders.models import Order
     from apps.printing.services import bill_data
 
@@ -176,9 +176,18 @@ def test_bill_merges_rows_split_only_by_cooking_instruction(api, order):
     assert len(response.data["items"]) == 5  # still separate rows on screen and KOT
 
     items = bill_data(Order.objects.get(pk=order["id"]))["items"]
+    assert [(i["item_name"], i["qty"], i["amount"]) for i in items] == [("Phulka", 10, 500)]
+
+    # A half portion at its own rate gets a line of its own.
+    half = response.data["items"][-1]["id"]
+    response = waiter.patch(
+        f"/api/orders/{order['id']}/", {"lines": [{"id": half, "unit_price": "25"}]}, format="json"
+    )
+    assert response.status_code == 200, response.data
+    items = bill_data(Order.objects.get(pk=order["id"]))["items"]
     assert [(i["item_name"], i["qty"], i["amount"]) for i in items] == [
-        ("Phulka", 8, 400),
-        ("Phulka (J)", 2, 100),
+        ("Phulka", 9, 450),
+        ("Phulka", 1, 25),
     ]
 
 
