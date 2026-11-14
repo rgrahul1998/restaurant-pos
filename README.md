@@ -72,6 +72,15 @@ Cashier, Waiter, Kitchen) each see only their own screens; see [Roles](#roles).
 |---|---|
 | ![Menu](docs/screenshots/13-menu.jpg) | ![Staff](docs/screenshots/14-staff.jpg) |
 
+**Import a menu from Excel or CSV:** under **Menu → Import**, download the blank template (an Excel
+file with a "How to fill" sheet) or your current menu, fill in or edit the rows, and upload it. The
+POS checks every row first and shows what will be added or changed, with row numbers for any
+mistakes, before anything is saved. Dishes are matched by name, so you can change prices in bulk by
+importing the edited file again. Missing categories, kitchen stations and courses are created, and
+no dish is ever deleted.
+
+![Menu import](docs/screenshots/14b-menu-import.jpg)
+
 ### Backups
 Automatic backups on a schedule you set (default: every 3 hours, kept 7 days), plus a download
 button. One zip holds everything, and it restores onto a new server from the setup screen or the
@@ -130,7 +139,7 @@ screen in place of sign-in:
 
 | Option | What you get |
 |---|---|
-| **Start blank** | Your Admin account and the restaurant name. Then add the menu (**Menu**), staff (**Staff**) and rooms and tables (Django admin, `/admin/`). |
+| **Start blank** | Your Admin account and the restaurant name. Then add the menu (**Menu**, or **Menu → Import** from a spreadsheet), staff (**Staff**) and rooms and tables (Django admin, `/admin/`). |
 | **Load demo data** | A sample restaurant, *Saffron Table*: 3 rooms and 17 tables, a 33-dish menu with Jain options, 5 staff (`manager`, `cashier`, `waiter`, `meena`, `kitchen`; all use the password you choose), four weeks of past sales, tables in service right now, and upcoming bookings. Good for training or trying things out. |
 | **Restore a backup** | Upload a `pos-backup-….zip` from another server (**Settings → Backup**). Everything comes back, and everyone signs in with their old password. |
 
@@ -225,6 +234,10 @@ Admins and Managers run the menu; only Admins see or manage staff. The Django ad
 - **Jain:** tick "Jain option" on a dish and the order screen asks Regular or Jain when it's added.
   A Jain portion is its own order line (`is_jain`, same price) and prints as `Dish name (J)` on the
   KOT and the bill; the kitchen screen tags it JAIN.
+- **Import** (`/menu` → Import): `GET /api/menu-items/template/[?current=1][&type=csv]` gives the
+  template or the current menu; `POST /api/menu-items/import/` with `file` checks it and returns
+  what would change, and with `save=true` also saves it, only if no row has an error. Columns, the
+  matching rules and the row checks are in `apps/menu/importer.py`.
 - **Deleting** something that's been used (an item that was ordered, a category with items, a station
   with tickets) is refused with a 409 and a reason; switch it off instead.
 - **Staff** (`/staff`): add people, set their role and password, and switch off "Can log in" when someone

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ImagePlus, Plus, Search } from 'lucide-react'
+import { ImagePlus, Plus, Search, Upload } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
 import { FormFooter, Select, Switch, textareaClass } from '@/components/fields'
@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { apiAll, patch, post, remove, sendForm } from '@/lib/api'
 import { money } from '@/lib/format'
 import type { Category, Course, MenuItem, Station } from '@/lib/types'
+import { MenuImport } from '@/pages/menu-import'
 import { cn } from '@/lib/utils'
 
 type Tab = 'items' | 'categories' | 'courses' | 'stations'
@@ -26,6 +27,7 @@ type Panel =
   | { kind: 'category'; category?: Category }
   | { kind: 'course'; course?: Course }
   | { kind: 'station'; station?: Station }
+  | { kind: 'import' }
 
 // Keys are shared with the order and kitchen screens, so edits show up there too.
 const KEYS = {
@@ -120,9 +122,14 @@ export function MenuPage() {
     <div className="mx-auto grid max-w-4xl gap-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-lg font-semibold tracking-tight">Menu</h1>
-        <Button size="lg" onClick={add}>
-          <Plus /> {TABS.find((t) => t.value === tab)!.add}
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="lg" onClick={() => setPanel({ kind: 'import' })}>
+            <Upload /> Import
+          </Button>
+          <Button size="lg" onClick={add}>
+            <Plus /> {TABS.find((t) => t.value === tab)!.add}
+          </Button>
+        </div>
       </header>
 
       <nav className="flex gap-1 overflow-x-auto rounded-xl bg-muted p-1 text-sm sm:w-fit">
@@ -146,7 +153,9 @@ export function MenuPage() {
 
       {panel && (
         <Sheet onClose={close}>
-          {panel.kind === 'item' ? (
+          {panel.kind === 'import' ? (
+            <MenuImport hasItems={(items.data?.length ?? 0) > 0} onDone={close} />
+          ) : panel.kind === 'item' ? (
             <ItemForm
               item={panel.item}
               categories={categories.data ?? []}
