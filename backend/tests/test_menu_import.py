@@ -15,7 +15,8 @@ from apps.users.models import Role, User
 pytestmark = pytest.mark.django_db
 
 HEADER = (
-    "Name*,Category*,Price*,Kitchen station,Course,Veg,Jain option,Special,Available,Description"
+    "Name*,Category*,Price*,Kitchen station,Course,Veg,Jain option,Special,Available,"
+    "Description,Number"
 )
 
 
@@ -151,3 +152,56 @@ def test_only_admin_and_manager():
         assert c.get("/api/menu-items/template/").status_code == 403
         assert post(c, csv_file(ROWS[0])).status_code == 403
     assert client(Role.ADMIN).get("/api/menu-items/template/").status_code == 200
+
+
+def test_item_numbers():
+    c = client()
+    post(c, csv_file(*ROWS), save=True)
+    # Blank numbers are given in turn.
+    assert sorted(MenuItem.objects.values_list("code", flat=True)) == [1, 2, 3]
+
+    # The file can set them; a number the file gives isn't handed out to a blank row first.
+    body = post(
+        c,
+        csv_file(
+            "Dal Khichdi,Mains,180,,,Yes,,,,,",
+            "Paneer Tikka,Starters,290,,,,,,,,4",
+        ),
+        save=True,
+    ).json()
+    assert body["errors"] == []
+    assert MenuItem.objects.get(name="Paneer Tikka").code == 4
+    assert MenuItem.objects.get(name="Dal Khichdi").code == 5
+    assert "Number 1 → 4" in next(r for r in body["rows"] if r["name"] == "Paneer Tikka")["changes"]
+
+    taken = MenuItem.objects.get(name="Dal Khichdi")
+    bad = post(
+        c,
+        csv_file(
+            "Masala Chai,Drinks,40,,,,,,,,5",
+            "Lassi,Drinks,60,,,,,,,,x",
+            "Kulfi,Desserts,90,,,,,,,,9",
+            "Kheer,Desserts,90,,,,,,,,9",
+        ),
+    ).json()
+    messages = [e["message"] for e in bad["errors"]]
+    assert f"Number 5 is already {taken.name}." in messages
+    assert any("“x” is not a whole number" in m for m in messages)
+    assert "Number 9 is also on row 4." in messages
+
+
+def test_number_from_the_menu_screen():
+    c = client()
+    category = Category.objects.create(name="Mains")
+    made = c.post(
+        "/api/menu-items/", {"name": "Dal", "category": category.id, "price": "100"}
+    ).json()
+    assert made["code"] == 1
+    other = c.post(
+        "/api/menu-items/", {"name": "Rice", "category": category.id, "price": "90", "code": 7}
+    ).json()
+    assert other["code"] == 7
+    res = c.patch(f"/api/menu-items/{made['id']}/", {"code": 7}, format="json")
+    assert res.status_code == 400
+    assert res.json()["code"] == ["Number 7 is already Rice."]
+    assert c.patch(f"/api/menu-items/{made['id']}/", {"code": 3}, format="json").json()["code"] == 3

@@ -46,6 +46,9 @@ class MenuItem(TimeStampedModel):
         Course, on_delete=models.SET_NULL, null=True, blank=True, related_name="items"
     )
     name = models.CharField(max_length=120, unique=True)
+    # Short number waiters type to find the dish fast ("12" instead of "Dal Khichdi").
+    # Left blank, the next free number is given on save.
+    code = models.PositiveIntegerField("number", unique=True, null=True, blank=True)
     description = models.TextField(blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     image = models.ImageField(upload_to="menu/", blank=True)
@@ -62,3 +65,9 @@ class MenuItem(TimeStampedModel):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        if self.code is None:
+            last = MenuItem.objects.aggregate(models.Max("code"))["code__max"]
+            self.code = (last or 0) + 1
+        super().save(*args, **kwargs)

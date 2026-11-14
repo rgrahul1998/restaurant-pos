@@ -49,14 +49,19 @@ COLUMNS = [
         "No hides it from the order screen. Blank means Yes for new dishes.",
     ),
     ("Description", "description", "Optional short description."),
+    (
+        "Number",
+        "code",
+        "Short number waiters type to find the dish. Blank keeps it, or gives the next free one.",
+    ),
 ]
 REQUIRED = {"name", "category", "price"}
 FLAGS = {"is_vegetarian", "has_jain", "is_special", "is_available"}
 HEADERS = [f"{h}*" if attr in REQUIRED else h for h, attr, _ in COLUMNS]
 EXAMPLES = [
-    ["Paneer Tikka", "Starters", 290, "Tandoor", "Starters", "Yes", "Yes", "No", "Yes", "Tikka"],
-    ["Butter Chicken", "Mains", 410, "Main Kitchen", "Mains", "No", "No", "Yes", "Yes", ""],
-    ["Mineral Water", "Packaged", 40, "", "", "Yes", "No", "No", "Yes", ""],
+    ["Paneer Tikka", "Starters", 290, "Tandoor", "Starters", "Yes", "Yes", "No", "Yes", "Tikka", 1],
+    ["Butter Chicken", "Mains", 410, "Main Kitchen", "Mains", "No", "No", "Yes", "Yes", "", 2],
+    ["Mineral Water", "Packaged", 40, "", "", "Yes", "No", "No", "Yes", "", ""],
 ]  # fmt: skip
 YES = {"yes", "y", "true", "1", "veg", "✓"}
 NO = {"no", "n", "false", "0", "non-veg", "nonveg", ""}
@@ -76,7 +81,8 @@ def _key(header) -> str | None:
         if text == re.sub(r"[^a-z]", "", h.lower()):
             return attr
     aliases = {"item": "name", "dish": "name", "itemname": "name", "rate": "price", "mrp": "price",
-               "station": "station", "vegetarian": "is_vegetarian", "jain": "has_jain"}  # fmt: skip
+               "station": "station", "vegetarian": "is_vegetarian", "jain": "has_jain",
+               "no": "code", "code": "code", "itemno": "code", "itemcode": "code"}  # fmt: skip
     return aliases.get(text)
 
 
@@ -188,11 +194,21 @@ def _lookup(model, name: str, cache: dict, created: list[str], **create):
     return cache[key]
 
 
+def _code(value: str, row: int, errors: list) -> int | None:
+    text = value.strip().removesuffix(".0")  # Excel hands whole numbers back as "12.0"
+    if not text:
+        return None
+    if not text.isdigit() or int(text) == 0 or int(text) > 2_147_483_647:
+        errors.append({"row": row, "message": f"Number: “{value}” is not a whole number above 0."})
+        return None
+    return int(text)
+
+
 def _money(value) -> str:
     return f"₹{value:,.2f}".removesuffix(".00")
 
 
-def _apply_row(item, row, name, price, category, course, flags, existing) -> list[str]:
+def _apply_row(item, row, name, price, code, category, course, flags, existing) -> list[str]:
     """Set the row's values on `item`; for an existing dish, say what changed."""
     changes = []
 
@@ -205,6 +221,8 @@ def _apply_row(item, row, name, price, category, course, flags, existing) -> lis
 
     set_("name", name, "Name")
     set_("price", price, "Price", _money)
+    if code is not None:
+        set_("code", code, "Number", lambda v: "—" if v is None else str(v))
     if item.category_id is None or item.category.name.lower() != category.name.lower():
         if existing:
             changes.append(f"Category {item.category.name} → {category.name}")
@@ -228,6 +246,7 @@ def _check(rows) -> tuple[Result, list]:
     errors = result.errors
     plan = []  # (MenuItem, category, course, station or None, station given?)
     seen: dict[str, int] = {}
+    seen_codes: dict[int, int] = {}
     categories, stations, courses = {}, {}, {}
     last = Category.objects.order_by("-sort_order").values_list("sort_order", flat=True).first()
     next_sort = (last or 0) + 1
@@ -247,6 +266,16 @@ def _check(rows) -> tuple[Result, list]:
             )
         seen.setdefault(name.lower(), number)
         price = _price(row["price"], number, errors) if row.get("price") else None
+        code = _code(row.get("code", ""), number, errors)
+        if code is not None:
+            if code in seen_codes:
+                errors.append(
+                    {"row": number, "message": f"Number {code} is also on row {seen_codes[code]}."}
+                )
+            seen_codes.setdefault(code, number)
+            other = MenuItem.objects.filter(code=code).exclude(name__iexact=name).first()
+            if other:
+                errors.append({"row": number, "message": f"Number {code} is already {other.name}."})
         flags = {
             attr: _flag(row.get(attr, ""), number, h, errors)
             for h, attr, _ in COLUMNS
@@ -279,7 +308,9 @@ def _check(rows) -> tuple[Result, list]:
         item = MenuItem.objects.filter(name__iexact=name).first()
         action = "update" if item else "create"
         item = item or MenuItem(name=name, is_available=True)
-        changes = _apply_row(item, row, name, price, category, course, flags, action == "update")
+        changes = _apply_row(
+            item, row, name, price, code, category, course, flags, action == "update"
+        )
 
         result.rows.append(
             {
@@ -305,6 +336,9 @@ def apply(upload) -> dict:
     result, plan = _check(read_rows(upload))
     if result.errors:
         return result.as_dict(saved=False)
+    # Numbered dishes first, so a blank one's "next free number" can't take a number the file
+    # gives to a dish further down.
+    plan.sort(key=lambda step: step[0].code is None)
     for item, category, course, station, station_given in plan:
         for obj in (station, course):
             if obj is not None and obj.pk is None:
@@ -336,6 +370,7 @@ def _current_rows() -> list[list]:
             yes_no(i.is_special),
             yes_no(i.is_available),
             i.description,
+            i.code or "",
         ]
         for i in MenuItem.objects.select_related("category__station", "course").order_by(
             "category__sort_order", "category__name", "name"
@@ -354,7 +389,7 @@ def template_xlsx(current: bool) -> bytes:
     for row in _current_rows() if current else []:
         sheet.append(row)
     sheet.freeze_panes = "A2"
-    for letter, width in zip("ABCDEFGHIJ", [28, 16, 10, 16, 12, 7, 12, 9, 10, 40], strict=True):
+    for letter, width in zip("ABCDEFGHIJK", [28, 16, 10, 16, 12, 7, 12, 9, 10, 40, 9], strict=True):
         sheet.column_dimensions[letter].width = width
     yes_no = DataValidation(type="list", formula1='"Yes,No"', allow_blank=True)
     sheet.add_data_validation(yes_no)

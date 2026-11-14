@@ -13,6 +13,7 @@ import { api, apiAll, patch, post } from '@/lib/api'
 import { canPrintHere, printHere, type DeviceTicket } from '@/lib/device-printer'
 import { useAuth } from '@/lib/auth'
 import { money } from '@/lib/format'
+import { searchMenu } from '@/lib/menu-search'
 import { canBill, canCancelSent } from '@/lib/nav'
 import { METHODS } from '@/lib/payments'
 import type {
@@ -289,18 +290,27 @@ function MenuPicker(props: {
   if (menu.isPending || categories.isPending) return <PageState>Loading menu…</PageState>
   if (menu.isError || categories.isError) return <PageState error>Could not load the menu.</PageState>
 
-  const query = search.trim().toLowerCase()
-  const visible = menu.data.filter(
-    (m) =>
-      (query ? m.name.toLowerCase().includes(query) : category === null || m.category === category),
-  )
+  const query = search.trim()
+  const visible = query
+    ? searchMenu(menu.data, query)
+    : menu.data.filter((m) => category === null || m.category === category)
+  // Enter adds the best match, so "12 ⏎" orders dish 12. A Jain-option dish still needs a tap.
+  const top = query ? visible[0] : undefined
+  const quickAdd = top && top.is_available && !top.has_jain ? top : undefined
 
   return (
     <section className="grid gap-4">
       <Input
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search the menu"
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter' || !quickAdd || props.busy) return
+          e.preventDefault()
+          props.onAdd(quickAdd)
+          setSearch('')
+        }}
+        placeholder="Search by name or number"
+        enterKeyHint="done"
         className="h-11 rounded-xl bg-background px-4"
       />
       <div className="flex gap-2 overflow-x-auto">
@@ -342,7 +352,10 @@ function MenuPicker(props: {
             if (m.has_jain && m.is_available) {
               return (
                 <div key={m.id} className={cn(tile, 'gap-3')}>
-                  <span className="pr-6 text-sm leading-snug font-medium">{m.name}</span>
+                  <span className="pr-6 text-sm leading-snug font-medium">
+                    <span className="mr-1.5 text-xs font-normal text-muted-foreground tabular-nums">{m.code}</span>
+                    {m.name}
+                  </span>
                   <span className="text-sm text-muted-foreground tabular-nums">{money(m.price)}</span>
                   <div className="grid grid-cols-2 gap-1.5">
                     <Button variant="outline" disabled={props.busy} onClick={() => props.onAdd(m)}>
@@ -366,9 +379,16 @@ function MenuPicker(props: {
                 key={m.id}
                 disabled={!m.is_available || props.busy}
                 onClick={() => props.onAdd(m)}
-                className={cn(tile, 'hover:border-foreground/40 active:bg-muted disabled:pointer-events-none')}
+                className={cn(
+                  tile,
+                  'hover:border-foreground/40 active:bg-muted disabled:pointer-events-none',
+                  m === quickAdd && 'ring-2 ring-foreground/15',
+                )}
               >
-                <span className="pr-6 text-sm leading-snug font-medium">{m.name}</span>
+                <span className="pr-6 text-sm leading-snug font-medium">
+                  <span className="mr-1.5 text-xs font-normal text-muted-foreground tabular-nums">{m.code}</span>
+                  {m.name}
+                </span>
                 <span className="text-sm text-muted-foreground tabular-nums">
                   {m.is_available ? money(m.price) : 'Unavailable'}
                 </span>

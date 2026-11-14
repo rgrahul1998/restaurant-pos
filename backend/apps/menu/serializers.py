@@ -23,6 +23,7 @@ class MenuItemSerializer(serializers.ModelSerializer):
             "category",
             "course",
             "name",
+            "code",
             "description",
             "price",
             "image",
@@ -31,7 +32,14 @@ class MenuItemSerializer(serializers.ModelSerializer):
             "is_special",
             "is_available",
         ]
-        extra_kwargs = {"image": {"allow_null": True}}
+        # validate_code says which dish has the number, instead of the stock "already exists".
+        extra_kwargs = {"image": {"allow_null": True}, "code": {"validators": []}}
+
+    def validate_code(self, value):
+        taken = MenuItem.objects.filter(code=value).exclude(pk=getattr(self.instance, "pk", None))
+        if value is not None and (other := taken.first()):
+            raise serializers.ValidationError(f"Number {value} is already {other.name}.")
+        return value
 
     def validate_image(self, value):
         # null clears the photo; the column itself stores "" for "no image".

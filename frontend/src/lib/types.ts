@@ -83,6 +83,8 @@ export interface MenuItem {
   category: number
   course: number | null
   name: string
+  /** Short number waiters type to find the dish; given automatically when left blank. */
+  code: number | null
   description: string
   price: string
   /** Absolute URL, or null when there's no photo. */

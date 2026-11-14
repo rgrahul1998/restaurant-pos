@@ -29,7 +29,7 @@ class MenuItemViewSet(viewsets.ModelViewSet):
     serializer_class = MenuItemSerializer
     permission_classes = [role_permission()]
     filterset_fields = ["category", "course", "is_available", "is_special", "is_vegetarian"]
-    search_fields = ["name"]
+    search_fields = ["name", "=code"]
 
     # Spreadsheet in and out. Same people who edit the menu (Admin, Manager).
     @action(detail=False, methods=["get"], permission_classes=[role_permission(read=MANAGEMENT)])

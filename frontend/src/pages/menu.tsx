@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { apiAll, patch, post, remove, sendForm } from '@/lib/api'
 import { money } from '@/lib/format'
+import { searchMenu } from '@/lib/menu-search'
 import type { Category, Course, MenuItem, Station } from '@/lib/types'
 import { MenuImport } from '@/pages/menu-import'
 import { cn } from '@/lib/utils'
@@ -206,15 +207,20 @@ function ItemsTab(props: {
     return <PageState>Add a category first (Categories tab), then add items to it.</PageState>
   }
 
-  const query = search.trim().toLowerCase()
-  const visible = props.items.filter((i) =>
-    query
-      ? i.name.toLowerCase().includes(query)
-      : category === 'all' || (category === 'off' ? !i.is_available : i.category === category),
-  )
-  const groups = props.categories
-    .map((c) => ({ category: c, items: visible.filter((i) => i.category === c.id) }))
-    .filter((g) => g.items.length > 0)
+  const query = search.trim()
+  const visible = query
+    ? searchMenu(props.items, query)
+    : props.items.filter(
+        (i) => category === 'all' || (category === 'off' ? !i.is_available : i.category === category),
+      )
+  // While searching, best matches first in one list; otherwise grouped by category.
+  const groups = query
+    ? visible.length
+      ? [{ category: null, items: visible }]
+      : []
+    : props.categories
+        .map((c) => ({ category: c, items: visible.filter((i) => i.category === c.id) }))
+        .filter((g) => g.items.length > 0)
   const unavailable = props.items.filter((i) => !i.is_available).length
   const courseName = (id: number | null) => props.courses.find((c) => c.id === id)?.name
 
@@ -226,7 +232,7 @@ function ItemsTab(props: {
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search items"
+          placeholder="Search by name or number"
           aria-label="Search items"
           className="h-9 rounded-xl bg-background pl-10"
         />
@@ -260,12 +266,12 @@ function ItemsTab(props: {
         <PageState>{query ? 'Nothing matches.' : 'No items here yet.'}</PageState>
       ) : (
         groups.map(({ category: c, items }) => (
-          <section key={c.id} className="grid gap-2">
+          <section key={c?.id ?? 'results'} className="grid gap-2">
             <h2 className="flex items-baseline gap-2 px-1 text-sm font-medium">
-              {c.name}
+              {c ? c.name : 'Results'}
               <span className="text-xs font-normal text-muted-foreground">
                 {items.length}
-                {!c.is_active && ' · category hidden from the order screen'}
+                {c && !c.is_active && ' · category hidden from the order screen'}
               </span>
             </h2>
             <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(22rem,100%),1fr))] gap-3">
@@ -281,6 +287,9 @@ function ItemsTab(props: {
                   <div className={cn('min-w-0 flex-1', !item.is_available && 'opacity-50')}>
                     <p className="flex items-center gap-2 font-medium">
                       <VegMark veg={item.is_vegetarian} />
+                      <span className="w-7 shrink-0 text-sm font-normal text-muted-foreground tabular-nums">
+                        {item.code}
+                      </span>
                       <span className="truncate">{item.name}</span>
                     </p>
                     {/* Tags under the name, so long names keep the whole first line. */}
@@ -342,6 +351,7 @@ function ItemForm(props: {
   const queryClient = useQueryClient()
   const [form, setForm] = useState({
     name: editing?.name ?? '',
+    code: editing?.code != null ? String(editing.code) : '',
     price: editing ? String(Number(editing.price)) : '',
     category: (editing?.category ?? props.categories[0]?.id ?? null) as number | null,
     course: (editing?.course ?? null) as number | null,
@@ -363,7 +373,13 @@ function ItemForm(props: {
   const refresh = () => queryClient.invalidateQueries({ queryKey: KEYS.items })
   const save = useMutation({
     mutationFn: () => {
-      const body = { ...form, name: form.name.trim(), description: form.description.trim() }
+      const body = {
+        ...form,
+        name: form.name.trim(),
+        description: form.description.trim(),
+        // Blank: the next free number (new item) or keep the current one.
+        code: form.code.trim() ? Number(form.code) : (editing?.code ?? null),
+      }
       const path = editing ? `/menu-items/${editing.id}/` : '/menu-items/'
       const method = editing ? 'PATCH' : 'POST'
       if (photo) return sendForm<MenuItem>(method, path, { ...body, image: photo })
@@ -424,9 +440,22 @@ function ItemForm(props: {
         </div>
       </div>
 
-      <Field label="Name">
-        <Input autoFocus={!editing} value={form.name} onChange={(e) => set('name', e.target.value)} />
-      </Field>
+      <div className="grid grid-cols-[1fr_6rem] gap-3">
+        <Field label="Name">
+          <Input autoFocus={!editing} value={form.name} onChange={(e) => set('name', e.target.value)} />
+        </Field>
+        <Field label="Number">
+          <Input
+            type="number"
+            min={1}
+            step={1}
+            inputMode="numeric"
+            placeholder="Auto"
+            value={form.code}
+            onChange={(e) => set('code', e.target.value)}
+          />
+        </Field>
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Price (₹)">
           <Input
