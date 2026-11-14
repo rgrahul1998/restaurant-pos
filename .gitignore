@@ -19,3 +19,9 @@ frontend/dist/
 # QZ Tray signing keys
 *.pem
 pos-backup-*.zip
+
+# Android app build output
+*.apk
+android-app/android/app/build/
+android-app/android/build/
+android-app/android/.gradle/

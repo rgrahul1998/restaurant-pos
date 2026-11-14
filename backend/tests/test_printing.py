@@ -9,7 +9,7 @@ from rest_framework.test import APIClient
 from apps.floor.models import Room, Table
 from apps.kitchen.models import KOT, Station
 from apps.menu.models import Category, MenuItem
-from apps.printing.models import Restaurant
+from apps.printing.models import PrintSettings, Restaurant
 from apps.printing.ticket import CUT
 from apps.users.models import Role, User
 
@@ -180,3 +180,49 @@ def test_bill_merges_rows_split_only_by_cooking_instruction(api, order):
         ("Phulka", 8, 400),
         ("Phulka (J)", 2, 100),
     ]
+
+
+def test_tablet_prints_its_own_tickets(api, order):
+    """The Android app prints straight to the network printer; the Printer page stays out."""
+    waiter, cashier, admin = api(Role.WAITER), api(Role.CASHIER), api(Role.ADMIN)
+    url = f"/api/orders/{order['id']}/"
+
+    # No network printer yet: nothing for the tablet, the Printer page prints as before.
+    first = waiter.post(url + "fire/", {"print_here": True}, format="json").data
+    assert "print" not in first
+    assert len(pending(cashier)) == 1
+    KOT.objects.update(print_claimed_at=None)
+    for kot in KOT.objects.all():  # as if the Printer page printed it
+        cashier.post("/api/printing/printed/", {"kind": "kot", "id": kot.id})
+
+    settings = {"kot_printer_host": "192.168.10.12", "bill_printer_host": "", "width": 32}
+    assert waiter.patch("/api/settings/printing/", settings).status_code == 403  # admin only
+    assert (
+        admin.patch("/api/settings/printing/", {"kot_printer_host": "http://x"}).status_code == 400
+    )
+    assert admin.patch("/api/settings/printing/", settings).data["port"] == 9100
+
+    line = order["items"][0]["id"]
+    waiter.patch(url, {"lines": [{"id": line, "quantity": 7}]}, format="json")
+    (ticket,) = waiter.post(url + "fire/", {"print_here": True}, format="json").data["print"]
+    assert (ticket["kind"], ticket["host"], ticket["port"]) == ("kot", "192.168.10.12", 9100)
+    assert b"ORDER MODIFIED" in base64.b64decode(ticket["ticket"])
+    assert pending(cashier) == []  # claimed by the tablet
+
+    # The tablet couldn't print it: once the claim runs out, the Printer page does.
+    KOT.objects.filter(pk=ticket["id"]).update(
+        print_claimed_at=timezone.now() - timedelta(seconds=31)
+    )
+    assert [t["id"] for t in pending(cashier)] == [ticket["id"]]
+
+    # A bill prints from the tablet without the Printer page being open, to the bill printer.
+    admin.patch("/api/settings/printing/", {"bill_printer_host": "192.168.10.13"})
+    cashier.post(url + "bill/")
+    cache.delete("printing:page-alive")  # the pending() calls above count as the page
+    assert cashier.post(url + "print-bill/").status_code == 400  # Printer page isn't open
+    (bill,) = cashier.post(url + "print-bill/", {"print_here": True}, format="json").data["print"]
+    assert (bill["kind"], bill["host"]) == ("bill", "192.168.10.13")
+    assert [t["kind"] for t in pending(cashier)] == ["kot"]  # the bill is the tablet's
+    printed = {"kind": "bill", "id": bill["id"], "printer": "192.168.10.13"}
+    assert cashier.post("/api/printing/printed/", printed).status_code == 204
+    assert PrintSettings.load().width == 32

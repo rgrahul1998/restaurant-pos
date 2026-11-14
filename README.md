@@ -367,6 +367,30 @@ and change lines.
 Laptop setup: install QZ Tray from <https://qz.io/download>, check each printer prints a Windows
 test page, then open `/printer`.
 
+### Tablets: printing straight to a WiFi printer
+
+The Android app (`android-app/`) opens the cloud site and adds one thing a browser can't do:
+send tickets straight to a network printer's IP (port 9100). With it, the laptop isn't needed
+for printing.
+
+- **Set up:** in **Settings → Printing** (admin), enter the KOT printer's IP from its self-test
+  slip, and optionally a separate bill printer. Give printers a fixed IP so it doesn't change.
+- **Send to kitchen / Print bill** in the app: the server creates the ticket already claimed by
+  that tablet (`print_here: true`) and returns it with the printer's address; the tablet prints it
+  and reports it printed. A web browser keeps using the Printer page as before.
+- **If the tablet can't print** (printer off, no paper, WiFi down): it says so, and the Printer
+  page prints the ticket after 30 seconds if it's open. Reprint on the kitchen screen also works.
+- **Test print:** Settings → Printing in the app has a button per printer.
+- **Build:** needs Java 21 and the Android SDK (`ANDROID_HOME`). The site address is in
+  `android-app/capacitor.config.json`.
+
+  ```bash
+  cd android-app && npm install && JAVA_HOME=~/jdk-21 ANDROID_HOME=~/android-sdk npm run build
+  ```
+
+  The APK lands in `android-app/android/app/build/outputs/apk/debug/`. Screens come from the
+  site, so only changes to the app's printing code need a new APK.
+
 QZ Tray asks "Allow?" on every connection unless requests are signed. To sign them, create a
 certificate once and point the backend at it in `.env`:
 

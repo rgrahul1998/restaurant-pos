@@ -17,13 +17,16 @@ from apps.core.realtime import PRINTER_GROUP, broadcast
 from apps.kitchen.models import KOT, KOTItem
 from apps.orders.models import Order
 
-from .models import BillPrintJob, KOTPrintLog, Restaurant
+from .models import BillPrintJob, KOTPrintLog, PrintSettings, Restaurant
 from .ticket import build_bill, build_ticket
 
 KOT_CATCH_UP = timedelta(hours=12)
 # A bill printed hours late is no use to anyone at the table, unlike a KOT record.
 BILL_CATCH_UP = timedelta(hours=2)
 BATCH_SIZE = 10
+# How long the Printer page leaves a ticket to the tablet that claimed it. If the tablet
+# couldn't print (printer off, out of paper), the Printer page prints it after this.
+CLAIM_SECONDS = 30
 PAGE_ALIVE_KEY = "printing:page-alive"
 PAGE_ALIVE_SECONDS = 30
 
@@ -156,43 +159,71 @@ def pending(since, width: int) -> list[dict]:
                 created_at__gte=max(since, now - KOT_CATCH_UP), print_log__isnull=True
             )
             .exclude(type__in=NOT_PRINTED)
+            .exclude(print_claimed_at__gte=now - timedelta(seconds=CLAIM_SECONDS))
             .select_related("order__table", "station", "created_by")
             .prefetch_related("items", "order__table__merged_tables")
             .order_by("created_at")[:BATCH_SIZE]
         )
-        for kot in kots:
-            data = kot_data(kot)
-            label = [data["name"], data["restaurant_table"], kot.get_type_display()]
-            tickets.append(
-                {
-                    "kind": "kot",
-                    "id": kot.pk,
-                    "label": " - ".join(filter(None, label)),
-                    "ticket": _encode(build_ticket(data, width)),
-                }
-            )
+        tickets += [kot_ticket(kot, width) for kot in kots]
 
     jobs = (
         BillPrintJob.objects.filter(
             status=BillPrintJob.Status.PENDING, created_at__gte=now - BILL_CATCH_UP
         )
+        .exclude(claimed_at__gte=now - timedelta(seconds=CLAIM_SECONDS))
         .select_related("order__table")
         .prefetch_related("order__items", "order__payments", "order__table__merged_tables")
         .order_by("created_at")[:BATCH_SIZE]
     )
     company = company_data() if jobs else {}
-    for job in jobs:
-        data = bill_data(job.order)
-        tickets.append(
-            {
-                "kind": "bill",
-                "id": job.pk,
-                "label": " - ".join(
-                    filter(None, ["Bill", f"#{job.order_id}", data["restaurant_table"]])
-                ),
-                "ticket": _encode(build_bill(data, company, width)),
-            }
+    tickets += [bill_ticket(job, company, width) for job in jobs]
+    return tickets
+
+
+def kot_ticket(kot: KOT, width: int) -> dict:
+    data = kot_data(kot)
+    label = [data["name"], data["restaurant_table"], kot.get_type_display()]
+    return {
+        "kind": "kot",
+        "id": kot.pk,
+        "label": " - ".join(filter(None, label)),
+        "ticket": _encode(build_ticket(data, width)),
+    }
+
+
+def bill_ticket(job: BillPrintJob, company: dict, width: int) -> dict:
+    data = bill_data(job.order)
+    return {
+        "kind": "bill",
+        "id": job.pk,
+        "label": " - ".join(filter(None, ["Bill", f"#{job.order_id}", data["restaurant_table"]])),
+        "ticket": _encode(build_bill(data, company, width)),
+    }
+
+
+def for_device(kots=(), job: BillPrintJob | None = None) -> list[dict]:
+    """Tickets for the tablet that just sent them, to print straight to the network printer.
+
+    The caller has already claimed them (when creating them), which keeps the Printer page
+    from printing them too. With no network printer set, the Printer page prints as before.
+    """
+    config = PrintSettings.load()
+    if not config.kot_printer_host:
+        return []
+    tickets = []
+    printable = [kot for kot in kots if kot.type not in NOT_PRINTED]
+    if printable:
+        rows = (
+            KOT.objects.filter(pk__in=[k.pk for k in printable])
+            .select_related("order__table", "station", "created_by")
+            .prefetch_related("items", "order__table__merged_tables")
+            .order_by("pk")
         )
+        tickets += [kot_ticket(kot, config.width) for kot in rows]
+    if job:
+        tickets.append(bill_ticket(job, company_data(), config.width))
+    for ticket in tickets:
+        ticket.update(host=config.host_for(ticket["kind"]), port=config.port)
     return tickets
 
 
@@ -209,19 +240,27 @@ def mark_printed(kind: str, pk: int, printer: str, user):
         )
 
 
-def queue_bill(order: Order, user) -> BillPrintJob:
+def queue_bill(order: Order, user, on_device: bool = False) -> BillPrintJob:
+    """`on_device`: the tablet asking prints it itself, so the Printer page needn't be open."""
     if order.status not in (Order.Status.BILLED, Order.Status.PAID):
         raise ValidationError("Bill the order before printing it.")
     # Staff must find out now if nothing can print, not when the customer is waiting.
-    if not cache.get(PAGE_ALIVE_KEY):
+    if not on_device and not cache.get(PAGE_ALIVE_KEY):
         raise ValidationError(
             "The bill was not printed. Open the Printer page on the laptop and check it says Ready."
         )
-    job, _ = BillPrintJob.objects.get_or_create(
-        order=order, status=BillPrintJob.Status.PENDING, defaults={"requested_by": user}
+    claimed = timezone.now() if on_device else None
+    job, created = BillPrintJob.objects.get_or_create(
+        order=order,
+        status=BillPrintJob.Status.PENDING,
+        defaults={"requested_by": user, "claimed_at": claimed},
     )
-    # Wake the Printer page now instead of on its next check.
-    transaction.on_commit(lambda: broadcast(PRINTER_GROUP, "print.ready", {}))
+    if on_device:
+        if not created:
+            BillPrintJob.objects.filter(pk=job.pk).update(claimed_at=claimed)
+    else:
+        # Wake the Printer page now instead of on its next check.
+        transaction.on_commit(lambda: broadcast(PRINTER_GROUP, "print.ready", {}))
     return job
 
 

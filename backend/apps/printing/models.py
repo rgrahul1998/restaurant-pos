@@ -40,6 +40,41 @@ class Restaurant(models.Model):
         return cls.objects.get_or_create(pk=1)[0]
 
 
+class PrintSettings(models.Model):
+    """Settings → Printing: the network printer that tablets print to directly.
+
+    Exactly one row. Empty host: tablets don't print, the laptop's Printer page does.
+    """
+
+    kot_printer_host = models.CharField(
+        "KOT printer IP", max_length=100, blank=True, help_text="e.g. 192.168.10.12"
+    )
+    bill_printer_host = models.CharField(
+        "Bill printer IP", max_length=100, blank=True, help_text="Empty: the KOT printer."
+    )
+    port = models.PositiveIntegerField(default=9100)
+    width = models.PositiveSmallIntegerField(
+        "Characters per line", default=48, choices=[(48, "80 mm"), (32, "58 mm")]
+    )
+
+    class Meta:
+        verbose_name = verbose_name_plural = "print settings"
+
+    def __str__(self):
+        return self.kot_printer_host or "No network printer"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls):
+        return cls.objects.get_or_create(pk=1)[0]
+
+    def host_for(self, kind: str) -> str:
+        return (self.bill_printer_host if kind == "bill" else "") or self.kot_printer_host
+
+
 class KOTPrintLog(models.Model):
     """A KOT that reached paper. Its absence is what makes a KOT "pending"."""
 
@@ -67,6 +102,8 @@ class BillPrintJob(TimeStampedModel):
     order = models.ForeignKey("orders.Order", on_delete=models.CASCADE, related_name="print_jobs")
     status = models.CharField(max_length=8, choices=Status.choices, default=Status.PENDING)
     printer = models.CharField(max_length=200, blank=True)
+    # A tablet said it prints this itself; the Printer page leaves it alone for a while.
+    claimed_at = models.DateTimeField(null=True, blank=True)
     requested_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="+"
     )

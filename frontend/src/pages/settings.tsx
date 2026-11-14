@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, CheckCircle2, DatabaseBackup, Download, Store, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, DatabaseBackup, Download, Printer, Store, XCircle } from 'lucide-react'
 import { useState } from 'react'
 import { NavLink, Navigate, useParams } from 'react-router-dom'
 
@@ -8,6 +8,7 @@ import { Switch } from '@/components/fields'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ApiError, api, download, patch, post } from '@/lib/api'
+import { canPrintHere, printRaw } from '@/lib/device-printer'
 import { time } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
@@ -49,6 +50,7 @@ const hours = (h: number) => (h === 1 ? 'hour' : `${h} hours`)
 // Each entry is one tab on the left; add a section here and it gets a tab and a URL.
 const SECTIONS = [
   { path: 'restaurant', label: 'Restaurant details', icon: Store, page: RestaurantSettings },
+  { path: 'printing', label: 'Printing', icon: Printer, page: PrintingSettings },
   { path: 'backup', label: 'Backup', icon: DatabaseBackup, page: BackupSettings },
 ] as const
 
@@ -258,6 +260,165 @@ function BillPreview({ r }: { r: Restaurant }) {
       <div className="my-2 border-t border-dashed border-neutral-400" />
       {r.bill_footer && <div>{r.bill_footer}</div>}
     </div>
+  )
+}
+
+// ---------- printing ----------
+
+interface PrintSettings {
+  kot_printer_host: string
+  bill_printer_host: string
+  port: number
+  width: 48 | 32
+}
+
+const WIDTHS = [
+  { value: '48', label: '80 mm' },
+  { value: '32', label: '58 mm' },
+] as const
+
+function PrintingSettings() {
+  const queryClient = useQueryClient()
+  const saved = useQuery({
+    queryKey: ['settings', 'printing'],
+    queryFn: () => api<PrintSettings>('/settings/printing/'),
+  })
+  const [draft, setDraft] = useState<PrintSettings | null>(null)
+  const [done, setDone] = useState(false)
+  const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null)
+  const save = useMutation({
+    mutationFn: (body: PrintSettings) => patch<PrintSettings>('/settings/printing/', body),
+    onSuccess: (fresh) => {
+      queryClient.setQueryData(['settings', 'printing'], fresh)
+      setDraft(null)
+      setDone(true)
+    },
+  })
+  const test = useMutation({
+    mutationFn: async (host: string) => {
+      const query = new URLSearchParams({ printer: host, width: String(value.width) })
+      const { ticket } = await api<{ ticket: string }>(`/printing/test-ticket/?${query}`)
+      await printRaw(host, value.port, ticket)
+    },
+    onSuccess: (_, host) => setTestResult({ ok: true, text: `Test page sent to ${host}.` }),
+    onError: (error, host) => setTestResult({ ok: false, text: `${host}: ${error.message}` }),
+  })
+
+  if (saved.isPending) return <Section title="Printing"><p className="text-sm text-muted-foreground">Loading…</p></Section>
+  if (saved.isError) return <Section title="Printing"><p className="text-sm text-destructive">{saved.error.message}</p></Section>
+
+  const value = draft ?? saved.data
+  const dirty = draft !== null && JSON.stringify(draft) !== JSON.stringify(saved.data)
+  const errors = (save.error instanceof ApiError && typeof save.error.data === 'object' ? save.error.data : {}) as Record<string, string[]>
+  const update = (changes: Partial<PrintSettings>) => {
+    setDraft({ ...value, ...changes })
+    setDone(false)
+  }
+  const hostField = (name: 'kot_printer_host' | 'bill_printer_host', label: string, hint: string) => (
+    <label className="grid content-start gap-1.5">
+      <span className="text-sm font-medium">{label}</span>
+      <Input
+        value={value[name]}
+        onChange={(e) => update({ [name]: e.target.value })}
+        inputMode="decimal"
+        placeholder="192.168.1.50"
+        maxLength={100}
+        aria-invalid={!!errors[name]}
+        className="h-10 tabular-nums"
+      />
+      {errors[name] ? (
+        <span className="text-xs text-destructive">{errors[name][0]}</span>
+      ) : (
+        <span className="text-xs text-muted-foreground">{hint}</span>
+      )}
+    </label>
+  )
+  const testHosts = [...new Set([value.kot_printer_host, value.bill_printer_host].map((h) => h.trim()).filter(Boolean))]
+
+  return (
+    <form
+      className="grid gap-6"
+      onSubmit={(e) => {
+        e.preventDefault()
+        save.mutate(value)
+      }}
+    >
+      <Section
+        title="Network printer"
+        description="Tablets running the POS app print KOTs and bills straight to this printer over WiFi, without the laptop. Leave it empty to print only from the laptop's Printer page."
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          {hostField('kot_printer_host', 'KOT printer IP', 'From the printer\'s self-test slip.')}
+          {hostField('bill_printer_host', 'Bill printer IP', 'Leave empty to print bills on the KOT printer.')}
+          <label className="grid content-start gap-1.5">
+            <span className="text-sm font-medium">Port</span>
+            <Input
+              value={value.port}
+              onChange={(e) => update({ port: Number(e.target.value.replace(/\D/g, '')) || 0 })}
+              inputMode="numeric"
+              maxLength={5}
+              aria-invalid={!!errors.port}
+              className="h-10 tabular-nums"
+            />
+            <span className={cn('text-xs', errors.port ? 'text-destructive' : 'text-muted-foreground')}>
+              {errors.port?.[0] ?? 'Almost always 9100.'}
+            </span>
+          </label>
+          <div className="grid content-start gap-1.5">
+            <span className="text-sm font-medium">Paper width</span>
+            <Pills
+              label="Paper width"
+              options={WIDTHS}
+              value={String(value.width)}
+              onChange={(w) => update({ width: Number(w) as 48 | 32 })}
+            />
+          </div>
+        </div>
+      </Section>
+
+      {testHosts.length > 0 && (
+        <Section
+          title="Test print"
+          description={
+            canPrintHere
+              ? 'Prints a test page from this tablet, using the settings above.'
+              : 'Open Settings in the POS app on a tablet to print a test page. A browser can\'t reach the printer.'
+          }
+        >
+          {canPrintHere && (
+            <div className="flex flex-wrap items-center gap-2">
+              {testHosts.map((host) => (
+                <Button key={host} type="button" variant="outline" disabled={test.isPending} onClick={() => test.mutate(host)}>
+                  Test {host}
+                </Button>
+              ))}
+              {testResult && (
+                <span className={cn('text-sm', testResult.ok ? 'text-muted-foreground' : 'text-destructive')}>{testResult.text}</span>
+              )}
+            </div>
+          )}
+        </Section>
+      )}
+
+      <div className="sticky bottom-0 flex items-center justify-end gap-3 rounded-2xl border bg-background/95 px-4 py-3 shadow-sm">
+        {done && !dirty && (
+          <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <CheckCircle2 className="size-4 text-emerald-600" /> Saved
+          </span>
+        )}
+        {save.error && !(save.error instanceof ApiError && save.error.status === 400) && (
+          <span className="text-sm text-destructive">{save.error.message}</span>
+        )}
+        {dirty && (
+          <Button type="button" variant="ghost" size="lg" onClick={() => { setDraft(null); save.reset() }}>
+            Discard
+          </Button>
+        )}
+        <Button type="submit" size="lg" disabled={!dirty || save.isPending}>
+          {save.isPending ? 'Saving…' : 'Save changes'}
+        </Button>
+      </div>
+    </form>
   )
 }
 

@@ -7,6 +7,7 @@ from rest_framework.response import Response
 
 from apps.core.permissions import BILLING, FRONT_OF_HOUSE, role_permission
 from apps.printing import services as printing
+from apps.printing.models import PrintSettings
 
 from . import services
 from .filters import OrderFilter
@@ -17,6 +18,11 @@ from .serializers import (
     PaymentSerializer,
     TransferSerializer,
 )
+
+
+def _print_here(request) -> bool:
+    return request.data.get("print_here") in (True, "true", "1")
+
 
 FrontOfHouse = role_permission(read=FRONT_OF_HOUSE, write=FRONT_OF_HOUSE)
 Billing = role_permission(read=BILLING, write=BILLING)
@@ -73,8 +79,18 @@ class OrderViewSet(
 
     @action(detail=True, methods=["post"])
     def fire(self, request, pk=None):
-        """Send everything the kitchen hasn't seen yet."""
-        return self._respond(services.fire(self.get_object().pk, request.user).pk)
+        """Send everything the kitchen hasn't seen yet.
+
+        `print_here: true` (the Android app): the response's `print` lists the new KOTs for
+        the app to print straight to the network printer.
+        """
+        order = self.get_object()
+        on_device = _print_here(request) and bool(PrintSettings.load().kot_printer_host)
+        kots = services.fire(order.pk, request.user, claim_print=on_device)
+        response = self._respond(order.pk)
+        if on_device:
+            response.data["print"] = printing.for_device(kots=kots)
+        return response
 
     @action(detail=True, methods=["post"], serializer_class=BillSerializer)
     def bill(self, request, pk=None):
@@ -93,8 +109,15 @@ class OrderViewSet(
 
     @action(detail=True, methods=["post"], url_path="print-bill")
     def print_bill(self, request, pk=None):
-        """Queue the bill for the laptop's printer page."""
-        printing.queue_bill(self.get_object(), request.user)
+        """Queue the bill for the laptop's printer page.
+
+        `print_here: true` (the Android app, with a network printer set): returns the bill
+        for the app to print itself.
+        """
+        on_device = _print_here(request) and bool(PrintSettings.load().kot_printer_host)
+        job = printing.queue_bill(self.get_object(), request.user, on_device=on_device)
+        if on_device:
+            return Response({"print": printing.for_device(job=job)})
         return Response(status=204)
 
     @action(detail=True, methods=["post"])

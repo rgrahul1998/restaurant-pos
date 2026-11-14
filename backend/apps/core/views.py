@@ -12,8 +12,8 @@ from rest_framework.views import APIView
 from apps.core import backup, scheduler
 from apps.core.models import BackupSettings
 from apps.core.permissions import role_permission
-from apps.printing.models import Restaurant
-from apps.printing.serializers import RestaurantSerializer
+from apps.printing.models import PrintSettings, Restaurant
+from apps.printing.serializers import PrintSettingsSerializer, RestaurantSerializer
 from apps.users.models import Role
 
 
@@ -124,6 +124,21 @@ class RestaurantSettingsView(APIView):
 
     def patch(self, request):
         body = RestaurantSerializer(Restaurant.load(), data=request.data, partial=True)
+        body.is_valid(raise_exception=True)
+        body.save()
+        return Response(body.data)
+
+
+class PrintSettingsView(APIView):
+    """Settings → Printing: the network printer the Android app prints to directly."""
+
+    permission_classes = [AdminOnly]
+
+    def get(self, request):
+        return Response(PrintSettingsSerializer(PrintSettings.load()).data)
+
+    def patch(self, request):
+        body = PrintSettingsSerializer(PrintSettings.load(), data=request.data, partial=True)
         body.is_valid(raise_exception=True)
         body.save()
         return Response(body.data)

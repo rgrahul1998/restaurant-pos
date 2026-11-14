@@ -12,6 +12,7 @@ from apps.core.views import (
     BackupRunView,
     BackupSettingsView,
     BackupView,
+    PrintSettingsView,
     RestaurantSettingsView,
     health,
 )
@@ -50,6 +51,7 @@ urlpatterns = [
     path("api/setup/restore/", SetupRestoreView.as_view()),
     path("api/backup/", BackupView.as_view()),
     path("api/settings/restaurant/", RestaurantSettingsView.as_view()),
+    path("api/settings/printing/", PrintSettingsView.as_view()),
     path("api/settings/backup/", BackupSettingsView.as_view()),
     path("api/settings/backup/run/", BackupRunView.as_view()),
     path("api/settings/backup/files/<str:name>/", BackupFileView.as_view()),

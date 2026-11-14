@@ -130,12 +130,14 @@ def update_order(order_id, user, *, lines=(), **fields) -> Order:
     return order
 
 
-def _fire(order: Order, user) -> list[KOT]:
+def _fire(order: Order, user, claim_print=False) -> list[KOT]:
     """Send the kitchen whatever changed since the last ticket, all items on one ticket.
 
     Each line remembers how much the kitchen already knows (`kot_quantity`), so only
     the difference travels: increases as a New/Modified ticket, decreases as a
     cancellation ticket. Every item is listed, whatever its category's station.
+    `claim_print`: the device sending prints the tickets itself (see printing.for_device),
+    marked in the same transaction so the Printer page never sees them unclaimed.
     """
     items = list(order.items.all())
     added, cancelled = [], []
@@ -151,7 +153,8 @@ def _fire(order: Order, user) -> list[KOT]:
         item.save(update_fields=["kot_quantity", "updated_at"])
 
     def ticket(kind, lines):
-        kot = KOT.objects.create(order=order, type=kind, created_by=user)
+        claimed = timezone.now() if claim_print else None
+        kot = KOT.objects.create(order=order, type=kind, created_by=user, print_claimed_at=claimed)
         KOTItem.objects.bulk_create(
             KOTItem(
                 kot=kot,
@@ -178,13 +181,13 @@ def _fire(order: Order, user) -> list[KOT]:
 
 
 @transaction.atomic
-def fire(order_id, user) -> Order:
+def fire(order_id, user, claim_print=False) -> list[KOT]:
+    """The tickets this send made."""
     order = _lock(order_id)
     _require(order, Order.Status.OPEN, "Only an open order can be sent to the kitchen.")
     if not order.items.exclude(quantity=F("kot_quantity")).exists():
         raise ValidationError("Nothing new to send to the kitchen.")
-    _fire(order, user)
-    return order
+    return _fire(order, user, claim_print)
 
 
 def _close(order: Order, status: Order.Status):

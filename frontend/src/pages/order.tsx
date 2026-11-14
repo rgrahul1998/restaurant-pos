@@ -10,6 +10,7 @@ import { PageState } from '@/components/page-state'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { api, apiAll, patch, post } from '@/lib/api'
+import { canPrintHere, printHere, type DeviceTicket } from '@/lib/device-printer'
 import { useAuth } from '@/lib/auth'
 import { money } from '@/lib/format'
 import { canBill, canCancelSent } from '@/lib/nav'
@@ -73,7 +74,12 @@ export function OrderPage() {
     )
   const act = (name: 'fire' | 'bill' | 'reopen' | 'cancel', body?: unknown) =>
     run.mutate(async () => {
-      const fresh = await post<Order>(`/orders/${orderId}/${name}/`, body)
+      // In the Android app, the KOT comes back to be printed from this tablet.
+      const fresh = await post<Order & { print?: DeviceTicket[] }>(
+        `/orders/${orderId}/${name}/`,
+        name === 'fire' && canPrintHere ? { print_here: true } : body,
+      )
+      if (fresh.print?.length) setNotice((await printHere(fresh.print)) ?? '')
       // Billing prints the bill. A printing problem is reported but doesn't undo the bill.
       if (name === 'bill') await printBill()
       return fresh
@@ -82,8 +88,11 @@ export function OrderPage() {
   const printBill = async () => {
     setNotice('')
     try {
-      await post(`/orders/${orderId}/print-bill/`)
-      setNotice('Bill sent to the printer.')
+      const sent = await post<{ print: DeviceTicket[] } | null>(
+        `/orders/${orderId}/print-bill/`,
+        canPrintHere ? { print_here: true } : undefined,
+      )
+      setNotice((sent?.print && (await printHere(sent.print))) || 'Bill sent to the printer.')
     } catch (err) {
       setNotice(err instanceof Error ? err.message : 'The bill was not printed.')
     }
@@ -157,6 +166,7 @@ export function OrderPage() {
   const actions = (
     <>
       {error && <p className="text-sm text-destructive">{error}</p>}
+      {notice && status === 'open' && <p className="text-sm text-destructive">{notice}</p>}
 
       {status === 'open' && current && (
         <OpenActions
