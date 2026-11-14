@@ -156,3 +156,27 @@ def test_test_ticket_and_unsigned_qz(api, settings):
     assert client.get("/api/printing/qz/certificate/").data == {"certificate": ""}
     assert client.post("/api/printing/qz/sign/", {"message": "abc"}).data == {"signature": ""}
     assert APIClient().get("/api/printing/pending/").status_code == 401
+
+
+def test_bill_merges_rows_split_only_by_cooking_instruction(api, order):
+    from apps.orders.models import Order
+    from apps.printing.services import bill_data
+
+    waiter = api(Role.WAITER)
+    phulka = order["items"][0]["menu_item"]
+    MenuItem.objects.filter(pk=phulka).update(has_jain=True)
+    lines = [
+        {"menu_item": phulka, "quantity": 2, "note": "crispy"},
+        {"menu_item": phulka, "quantity": 1},
+        {"menu_item": phulka, "quantity": 1, "is_jain": True, "note": "soft"},
+        {"menu_item": phulka, "quantity": 1, "is_jain": True},
+    ]
+    response = waiter.patch(f"/api/orders/{order['id']}/", {"lines": lines}, format="json")
+    assert response.status_code == 200, response.data
+    assert len(response.data["items"]) == 5  # still separate rows on screen and KOT
+
+    items = bill_data(Order.objects.get(pk=order["id"]))["items"]
+    assert [(i["item_name"], i["qty"], i["amount"]) for i in items] == [
+        ("Phulka", 8, 400),
+        ("Phulka (J)", 2, 100),
+    ]

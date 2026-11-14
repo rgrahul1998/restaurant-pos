@@ -86,6 +86,20 @@ def kot_data(kot: KOT) -> dict:
     }
 
 
+def _bill_lines(order: Order) -> list[dict]:
+    """One bill line per dish. Rows split only by cooking instruction merge back together;
+    Jain and regular portions, and rows at different prices, stay apart."""
+    lines: dict[tuple, dict] = {}
+    for item in order.items.all():
+        if not item.quantity:
+            continue
+        key = (item.menu_item_id, item.name, item.is_jain, item.unit_price)
+        line = lines.setdefault(key, {"item_name": jain_name(item), "qty": 0, "amount": 0})
+        line["qty"] += item.quantity
+        line["amount"] += item.line_total
+    return list(lines.values())
+
+
 def bill_data(order: Order) -> dict:
     stamp = _stamp(order.created_at)
     return {
@@ -94,11 +108,7 @@ def bill_data(order: Order) -> dict:
         "posting_date": stamp["date"],
         "posting_time": stamp["time"],
         "docstatus": 1 if order.status == Order.Status.PAID else 0,
-        "items": [
-            {"item_name": jain_name(item), "qty": item.quantity, "amount": item.line_total}
-            for item in order.items.all()
-            if item.quantity
-        ],
+        "items": _bill_lines(order),
         "total": order.subtotal,
         "discount_amount": order.discount,
         "grand_total": order.total,

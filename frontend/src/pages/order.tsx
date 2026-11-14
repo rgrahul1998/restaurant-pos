@@ -1,6 +1,6 @@
 import { Dialog } from '@base-ui/react/dialog'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Minus, Plus } from 'lucide-react'
+import { MessageSquareText, Minus, Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
@@ -102,12 +102,16 @@ export function OrderPage() {
   const items = current?.items ?? []
   const title = current ? (current.table_name ?? 'Takeaway') : (table.data?.label ?? 'Takeaway')
 
-  const add = (menuItem: MenuItem, jain = false) => {
-    const line = items.find((i) => i.menu_item === menuItem.id && i.is_jain === jain && !i.note)
+  // Anything added after a KOT gets a row of its own, so it can carry its own cooking
+  // instruction; the bill merges these rows back into one line.
+  const add = (menuItemId: number, jain = false) => {
+    const line = items.find(
+      (i) => i.menu_item === menuItemId && i.is_jain === jain && !i.note && i.kot_quantity === 0,
+    )
     change([
       line
         ? { id: line.id, quantity: line.quantity + 1 }
-        : { menu_item: menuItem.id, ...(jain ? { is_jain: true } : {}) },
+        : { menu_item: menuItemId, ...(jain ? { is_jain: true } : {}) },
     ])
   }
 
@@ -143,6 +147,7 @@ export function OrderPage() {
         busy={run.isPending}
         mayCancelSent={canCancelSent(role)}
         onChange={change}
+        onAddMore={add}
       />
 
       {current && <Totals order={current} />}
@@ -203,7 +208,7 @@ export function OrderPage() {
   if (status === 'open')
     return (
       <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 pb-20 lg:grid-cols-[minmax(0,1fr)_26rem] lg:pb-0">
-        <MenuPicker items={items} onAdd={add} busy={run.isPending} />
+        <MenuPicker items={items} onAdd={(m, jain) => add(m.id, jain)} busy={run.isPending} />
         <aside id="cart" className={cn(panel, 'scroll-mt-20 lg:sticky lg:top-20')}>
           {summary}
           {actions}
@@ -373,6 +378,7 @@ function Lines(props: {
   busy: boolean
   mayCancelSent: boolean
   onChange: (lines: OrderLine[]) => void
+  onAddMore: (menuItemId: number, jain: boolean) => void
 }) {
   // Fully cancelled lines stay on the order for the kitchen's records; hide them here.
   const shown = props.items.filter((i) => i.quantity > 0 || i.quantity !== i.kot_quantity)
@@ -424,7 +430,12 @@ function Lines(props: {
                   size="icon"
                   aria-label={`Add one ${item.name}`}
                   disabled={props.busy}
-                  onClick={() => props.onChange([{ id: item.id, quantity: item.quantity + 1 }])}
+                  onClick={() =>
+                    // Once sent, more of it goes on a fresh row with its own instructions.
+                    item.kot_quantity > 0
+                      ? props.onAddMore(item.menu_item, item.is_jain)
+                      : props.onChange([{ id: item.id, quantity: item.quantity + 1 }])
+                  }
                 >
                   <Plus />
                 </Button>
@@ -433,25 +444,139 @@ function Lines(props: {
               <span className="text-sm tabular-nums">× {item.quantity}</span>
             )}
             {props.editable && item.kot_quantity === 0 ? (
-              <input
-                key={item.note}
-                defaultValue={item.note}
-                placeholder="Add a note for the kitchen"
-                maxLength={255}
-                onBlur={(e) => {
-                  const note = e.target.value.trim()
-                  if (note !== item.note) props.onChange([{ id: item.id, note }])
-                }}
-                onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-                className="col-span-2 mt-1 w-full bg-transparent text-xs text-muted-foreground outline-none placeholder:text-muted-foreground/50 focus:text-foreground"
+              <ItemNote
+                note={item.note}
+                busy={props.busy}
+                onSave={(note) => props.onChange([{ id: item.id, note }])}
               />
             ) : (
-              item.note && <p className="col-span-2 mt-1 text-xs text-muted-foreground">{item.note}</p>
+              item.note && (
+                <p className="col-span-2 mt-1 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-500">
+                  <MessageSquareText className="mt-px size-3.5 shrink-0" />
+                  {item.note}
+                </p>
+              )
             )}
           </li>
         )
       })}
     </ul>
+  )
+}
+
+/** Common cooking instructions, one tap each; anything else can be typed. Printed on the KOT only. */
+const QUICK_NOTES = [
+  '1 by 2',
+  'Soft',
+  'Crispy',
+  'Extra crispy',
+  'Spicy',
+  'Extra spicy',
+  'Less spicy',
+  'Less oil',
+  'No onion',
+  'No garlic',
+]
+
+const joinNotes = (parts: string[]) => parts.join(', ').slice(0, 255)
+const splitNote = (note: string) =>
+  note
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean)
+
+/** Special instructions for one line, editable until the kitchen has it. */
+function ItemNote(props: { note: string; busy: boolean; onSave: (note: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [draft, setDraft] = useState(props.note)
+
+  const start = () => {
+    setDraft(props.note)
+    setOpen(true)
+  }
+  const save = (note: string) => {
+    setOpen(false)
+    if (note.trim() !== props.note) props.onSave(note.trim())
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={start}
+        disabled={props.busy}
+        className={cn(
+          'col-span-2 mt-1 flex items-start gap-1.5 text-left text-xs',
+          props.note
+            ? 'text-amber-700 dark:text-amber-500'
+            : 'text-muted-foreground/70 hover:text-foreground',
+        )}
+      >
+        <MessageSquareText className="mt-px size-3.5 shrink-0" />
+        {props.note || 'Cooking instructions'}
+      </button>
+    )
+  }
+
+  const picked = splitNote(draft)
+  const toggle = (quick: string) =>
+    setDraft(
+      joinNotes(
+        picked.some((p) => p.toLowerCase() === quick.toLowerCase())
+          ? picked.filter((p) => p.toLowerCase() !== quick.toLowerCase())
+          : [...picked, quick],
+      ),
+    )
+
+  return (
+    <div className="col-span-2 mt-2 grid gap-2 rounded-lg border bg-muted/30 p-2.5">
+      <div className="flex flex-wrap gap-1.5">
+        {QUICK_NOTES.map((quick) => {
+          const on = picked.some((p) => p.toLowerCase() === quick.toLowerCase())
+          return (
+            <button
+              key={quick}
+              type="button"
+              aria-pressed={on}
+              onClick={() => toggle(quick)}
+              className={cn(
+                'rounded-full border px-2.5 py-1 text-xs transition-colors',
+                on
+                  ? 'border-foreground bg-foreground text-background'
+                  : 'bg-background hover:bg-muted',
+              )}
+            >
+              {quick}
+            </button>
+          )
+        })}
+      </div>
+      <Input
+        autoFocus
+        value={draft}
+        maxLength={255}
+        placeholder="Or type a cooking instruction"
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') save(draft)
+          if (e.key === 'Escape') setOpen(false)
+        }}
+        className="h-8 text-xs"
+      />
+      <div className="flex justify-end gap-2">
+        {props.note && (
+          <Button variant="ghost" size="sm" className="mr-auto text-destructive" onClick={() => save('')}>
+            Clear
+          </Button>
+        )}
+        <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
+          Cancel
+        </Button>
+        <Button size="sm" onClick={() => save(draft)}>
+          Save
+        </Button>
+      </div>
+    </div>
   )
 }
 
