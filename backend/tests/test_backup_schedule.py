@@ -115,3 +115,27 @@ def test_settings_are_admin_only():
     client.force_authenticate(User.objects.create_user("boss", role=Role.MANAGER))
     assert client.get("/api/settings/backup/").status_code == 403
     assert client.post("/api/settings/backup/run/").status_code == 403
+
+
+def test_two_backups_in_one_minute_never_overwrite(folder):
+    """The worker and "Back up now" in the same minute: both files are kept."""
+    first = scheduler.run_backup()
+    User.objects.create_user("later", password="x" * 10, role=Role.WAITER)
+    second = scheduler.run_backup()
+    assert first["name"] != second["name"]
+    assert second["name"] == first["name"].removesuffix(".zip") + "-2.zip"
+    names = {f["name"] for f in scheduler.stored()}
+    assert {first["name"], second["name"]} <= names
+    assert not [p for p in scheduler.backup_dir().iterdir() if "partial" in p.name]
+
+
+def test_create_backup_command_never_overwrites(folder, tmp_path):
+    from django.core.management import CommandError, call_command
+
+    out = tmp_path / "manual"
+    call_command("create_backup", str(out), verbosity=0)
+    call_command("create_backup", str(out), verbosity=0)
+    assert len(list(out.glob("pos-backup-*.zip"))) == 2
+    existing = next(out.glob("*.zip"))
+    with pytest.raises(CommandError, match="already exists"):
+        call_command("create_backup", str(existing))

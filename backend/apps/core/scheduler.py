@@ -83,14 +83,20 @@ def run_backup() -> dict:
     folder = backup_dir()
     with _lock():
         folder.mkdir(parents=True, exist_ok=True)
-        target = folder / backup.filename()
-        partial = target.with_suffix(
-            ".zip.partial"
-        )  # never leave a half-written zip that looks real
+        # Never leave a half-written zip that looks real.
+        partial = folder / f".{backup.filename()}.{os.getpid()}.partial"
         try:
             with partial.open("wb") as out:
                 backup.write_backup(out)
-            os.replace(partial, target)
+            target = backup.free_path(folder)  # picked last: a backup may have landed meanwhile
+            try:
+                os.link(partial, target)  # unlike a rename, fails rather than replace a file
+                partial.unlink()
+            except FileExistsError:
+                raise
+            except OSError:  # a drive without hard links (FAT USB stick, some network shares)
+                target = backup.free_path(folder)
+                os.replace(partial, target)
         except Exception as exc:
             partial.unlink(missing_ok=True)
             config.last_run_at, config.last_ok, config.last_error = timezone.now(), False, str(exc)

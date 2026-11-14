@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 from apps.core import backup
 
@@ -15,8 +15,10 @@ class Command(BaseCommand):
         target = Path(path or ".")
         if target.is_dir() or not target.suffix:
             target.mkdir(parents=True, exist_ok=True)
-            target = target / backup.filename()
-        with target.open("wb") as out:
+            target = backup.free_path(target)
+        elif target.exists():
+            raise CommandError(f"{target} already exists; choose another name or a folder.")
+        with target.open("xb") as out:  # "x": never overwrite an existing backup
             manifest = backup.write_backup(out)
         rows = sum(manifest["counts"].values())
         self.stdout.write(

@@ -63,6 +63,20 @@ def filename() -> str:
     return f"pos-backup-{timezone.localtime():%Y-%m-%d-%H%M}.zip"
 
 
+def free_path(folder: Path) -> Path:
+    """`folder/pos-backup-<minute>.zip`, or `…-2.zip`, `…-3.zip` when that minute is taken.
+
+    Two backups in one minute (the worker and someone pressing "Back up now") must never
+    replace each other.
+    """
+    first = folder / filename()
+    target, n = first, 1
+    while target.exists():
+        n += 1
+        target = first.with_name(f"{first.stem}-{n}.zip")
+    return target
+
+
 def summary() -> dict:
     """What a backup made now would hold: rows per table and uploaded files."""
     files = _media_files()
