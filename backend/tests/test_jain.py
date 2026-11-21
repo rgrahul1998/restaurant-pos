@@ -64,6 +64,9 @@ def test_jain_and_regular_are_separate_lines_and_print_with_j(setup):
     printed = base64.b64decode(tickets["tickets"][0]["ticket"]).decode("ascii", "replace")
     assert "Dal Makhani (J)" in printed
     assert printed.count("(J)") == 1
+    # The regular portion of a dish with a Jain option is marked too; other dishes aren't.
+    assert "Dal Makhani (R)" in printed
+    assert printed.count("(R)") == 1
 
 
 def test_jain_needs_the_option_on_the_dish(setup):

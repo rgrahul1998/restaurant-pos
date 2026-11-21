@@ -106,6 +106,11 @@ class BillSerializer(serializers.Serializer):
         max_digits=12, decimal_places=2, min_value=Decimal("0"), default=Decimal("0")
     )
     discount_type = serializers.ChoiceField(choices=["amount", "percent"], default="amount")
+    # Money the customer paid ahead (outside a reservation); taken off the bill.
+    # Left out of the request: the order keeps what it has.
+    advance = serializers.DecimalField(
+        max_digits=12, decimal_places=2, min_value=Decimal("0"), required=False
+    )
     # Asked when billing, both optional: kept on the order for promotions later.
     # Left out of the request: the order keeps what it has (e.g. from a reservation).
     customer_name = serializers.CharField(max_length=120, allow_blank=True, required=False)

@@ -53,8 +53,13 @@ def _stamp(moment):
 
 
 def jain_name(item) -> str:
-    """The printed name of an order or KOT line: Jain portions end in "(J)"."""
-    return f"{item.name} (J)" if item.is_jain else item.name
+    """The printed name of a KOT line. On a dish with a Jain option, Jain portions end in
+    "(J)" and regular ones in "(R)", so the kitchen can't mix them up."""
+    if item.is_jain:
+        return f"{item.name} (J)"
+    if item.order_item.menu_item.has_jain:
+        return f"{item.name} (R)"
+    return item.name
 
 
 def _order_fields(order: Order) -> dict:
@@ -162,7 +167,7 @@ def pending(since, width: int) -> list[dict]:
             .exclude(type__in=NOT_PRINTED)
             .exclude(print_claimed_at__gte=now - timedelta(seconds=CLAIM_SECONDS))
             .select_related("order__table", "station", "created_by")
-            .prefetch_related("items", "order__table__merged_tables")
+            .prefetch_related("items__order_item__menu_item", "order__table__merged_tables")
             .order_by("created_at")[:BATCH_SIZE]
         )
         tickets += [kot_ticket(kot, width) for kot in kots]
@@ -217,7 +222,7 @@ def for_device(kots=(), job: BillPrintJob | None = None) -> list[dict]:
         rows = (
             KOT.objects.filter(pk__in=[k.pk for k in printable])
             .select_related("order__table", "station", "created_by")
-            .prefetch_related("items", "order__table__merged_tables")
+            .prefetch_related("items__order_item__menu_item", "order__table__merged_tables")
             .order_by("pk")
         )
         tickets += [kot_ticket(kot, config.width) for kot in rows]

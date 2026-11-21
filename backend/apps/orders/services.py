@@ -206,11 +206,13 @@ def bill(
     user,
     discount: Decimal = Decimal("0"),
     discount_type="amount",
+    advance: Decimal | None = None,
     customer_name: str | None = None,
     customer_phone: str | None = None,
 ) -> Order:
     """`discount` is an amount, or a percentage of the subtotal for `discount_type="percent"`.
 
+    `advance` is money already received from the customer, taken off what's left to pay.
     The customer's name and mobile, when given, are saved on the order; None leaves them.
     """
     order = _lock(order_id)
@@ -229,6 +231,14 @@ def bill(
     elif discount > order.subtotal:
         raise ValidationError({"discount": "The discount can't be more than the bill."})
     order.discount = discount
+    if advance is not None and advance != order.advance:
+        if hasattr(order, "reservation"):
+            raise ValidationError(
+                {"advance": "This order's advance comes from its reservation; change it there."}
+            )
+        if advance > order.subtotal - discount:
+            raise ValidationError({"advance": "The advance can't be more than the bill."})
+        order.advance = advance
     if customer_name is not None:
         order.customer_name = customer_name
     if customer_phone is not None:

@@ -506,7 +506,7 @@ function ItemForm(props: {
         <div className="grid gap-1">
           <Switch showLabel label="Jain option" checked={form.has_jain} onChange={(v) => set('has_jain', v)} />
           <p className="text-xs text-muted-foreground">
-            Waiters choose Regular or Jain when ordering; Jain prints as “(J)” on the KOT.
+            Waiters choose Regular or Jain when ordering; Jain prints as “(J)” and regular as “(R)” on the KOT.
           </p>
         </div>
         <Switch showLabel label="Today's special" checked={form.is_special} onChange={(v) => set('is_special', v)} />

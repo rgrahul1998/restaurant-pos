@@ -1,4 +1,4 @@
-/** Marks a Jain portion wherever a line is shown; tickets print it as "(J)". */
+/** Marks a Jain portion wherever a line is shown; tickets print it as "(J)" (and regular portions of the dish as "(R)"). */
 export function JainTag() {
   return (
     <span

@@ -222,3 +222,23 @@ def test_bill_saves_optional_customer_details(api, table, menu):
     cashier.post(url + "reopen/")
     billed = cashier.post(url + "bill/", {"customer_name": "", "customer_phone": ""}).data
     assert (billed["customer_name"], billed["customer_phone"]) == ("", "")
+
+
+def test_bill_takes_an_advance_off_the_balance(api, table, menu):
+    cashier = api(Role.CASHIER)
+    order = open_order(cashier, table, lines=[(menu["tikka"], 2)])
+    url = f"/api/orders/{order['id']}/"
+    cashier.post(url + "fire/")
+
+    too_much = cashier.post(url + "bill/", {"discount": "100", "advance": "450"})
+    assert too_much.status_code == 400 and "advance" in too_much.data
+    billed = cashier.post(url + "bill/", {"discount": "100", "advance": "150"}).data
+    assert (billed["total"], billed["advance"], billed["balance"]) == ("400.00", "150.00", "250.00")
+    assert billed["status"] == "billed"
+
+    # Leaving it out on a re-bill keeps it; an advance covering the bill closes the order.
+    cashier.post(url + "reopen/")
+    assert cashier.post(url + "bill/").data["advance"] == "150.00"
+    cashier.post(url + "reopen/")
+    paid = cashier.post(url + "bill/", {"advance": "500"}).data
+    assert (paid["balance"], paid["status"]) == ("0.00", "paid")

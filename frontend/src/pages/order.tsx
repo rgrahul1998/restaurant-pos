@@ -727,7 +727,7 @@ function Totals({ order }: { order: Order }) {
       </div>
       {hasAdvance && (
         <div className={row}>
-          <dt>Advance · reservation #{order.reservation}</dt>
+          <dt>Advance{order.reservation && ` · reservation #${order.reservation}`}</dt>
           <dd>− {money(order.advance)}</dd>
         </div>
       )}
@@ -916,6 +916,8 @@ function PaymentForm(props: {
 interface BillBody {
   discount: string
   discount_type: 'amount' | 'percent'
+  /** Left out for a reservation's order: its advance is set there. */
+  advance?: string
   customer_name: string
   customer_phone: string
 }
@@ -935,9 +937,18 @@ function BillConfirm(props: {
   total: number
   discount: number
   onClose: () => void
-  onConfirm: (customer: { customer_name: string; customer_phone: string }) => void
+  onConfirm: (details: { customer_name: string; customer_phone: string; advance?: string }) => void
 }) {
   const { order } = props
+  const fromReservation = order.reservation !== null
+  const [advance, setAdvance] = useState(Number(order.advance) > 0 ? String(Number(order.advance)) : '')
+  const advanceValue = Number(advance) || 0
+  const advanceError =
+    !fromReservation && (Number.isNaN(Number(advance)) || advanceValue < 0)
+      ? 'Enter an amount.'
+      : !fromReservation && advanceValue > props.total
+        ? "The advance can't be more than the bill."
+        : ''
   const [name, setName] = useState(order.customer_name)
   const [phone, setPhone] = useState(order.customer_phone)
   const [touched, setTouched] = useState(false)
@@ -947,8 +958,12 @@ function BillConfirm(props: {
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     setTouched(true)
-    if (digits === null) return
-    props.onConfirm({ customer_name: name.trim(), customer_phone: digits })
+    if (digits === null || advanceError) return
+    props.onConfirm({
+      customer_name: name.trim(),
+      customer_phone: digits,
+      ...(fromReservation ? {} : { advance: String(advanceValue) }),
+    })
   }
 
   return (
@@ -967,7 +982,16 @@ function BillConfirm(props: {
                 and items can't be changed after this.
               </Dialog.Description>
             </div>
-            <p className="text-3xl font-semibold tracking-tight tabular-nums">{money(props.total)}</p>
+            <div className="grid gap-0.5">
+              <p className="text-3xl font-semibold tracking-tight tabular-nums">
+                {money(Math.max(props.total - advanceValue, 0))}
+              </p>
+              {advanceValue > 0 && (
+                <p className="text-sm text-muted-foreground tabular-nums">
+                  {money(props.total)} less {money(advanceValue)} advance
+                </p>
+              )}
+            </div>
             <form id="bill-confirm" onSubmit={submit} className="grid gap-3">
               <Field label="Customer name" hint="Optional">
                 <Input
@@ -991,6 +1015,28 @@ function BillConfirm(props: {
                 />
               </Field>
               {phoneError && <p className="-mt-1 text-xs text-destructive">{phoneError}</p>}
+              <Field
+                label="Advance received"
+                hint={
+                  advanceError
+                    ? undefined
+                    : fromReservation
+                      ? `Paid on reservation #${order.reservation}.`
+                      : 'Optional. Taken off the amount due.'
+                }
+              >
+                <Input
+                  value={advance}
+                  onChange={(e) => setAdvance(e.target.value)}
+                  inputMode="decimal"
+                  autoComplete="off"
+                  placeholder="0"
+                  disabled={fromReservation}
+                  aria-invalid={advanceError ? true : undefined}
+                  className="h-10 tabular-nums"
+                />
+              </Field>
+              {advanceError && <p className="-mt-1 text-xs text-destructive">{advanceError}</p>}
             </form>
             <div className="grid grid-cols-2 gap-2">
               <Dialog.Close render={<Button variant="outline" size="lg" className="h-11" />}>
