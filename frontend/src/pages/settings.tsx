@@ -7,8 +7,12 @@ import {
   ChefHat,
   DatabaseBackup,
   Download,
+  Monitor,
+  Moon,
   Printer,
   Store,
+  Sun,
+  SunMoon,
   X,
   XCircle,
 } from 'lucide-react'
@@ -22,6 +26,7 @@ import { Input } from '@/components/ui/input'
 import { ApiError, api, download, patch, post, put } from '@/lib/api'
 import { canPrintHere, printRaw } from '@/lib/device-printer'
 import { time } from '@/lib/format'
+import { setTheme, useTheme, type Theme } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 
 interface BackupState {
@@ -65,7 +70,79 @@ const SECTIONS = [
   { path: 'printing', label: 'Printing', icon: Printer, page: PrintingSettings },
   { path: 'cooking', label: 'Cooking instructions', icon: ChefHat, page: CookingInstructionsSettings },
   { path: 'backup', label: 'Backup', icon: DatabaseBackup, page: BackupSettings },
+  { path: 'appearance', label: 'Appearance', icon: SunMoon, page: AppearanceSettings },
 ] as const
+
+// ---------- appearance ----------
+
+const THEMES: { value: Theme; label: string; hint: string; icon: typeof Sun }[] = [
+  { value: 'light', label: 'Light', hint: 'Best in bright rooms', icon: Sun },
+  { value: 'dark', label: 'Dark', hint: 'Easy on the eyes at night', icon: Moon },
+  { value: 'system', label: 'System', hint: 'Follows this device', icon: Monitor },
+]
+
+/** A tiny screen drawn with the real theme tokens: wrapping it in .light/.dark swaps them. */
+function ThemePreview({ mode }: { mode: 'light' | 'dark' }) {
+  return (
+    <div className={cn(mode, 'grid h-full gap-1.5 bg-background p-2.5')}>
+      <div className="h-1.5 w-1/3 rounded-full bg-foreground/80" />
+      <div className="grid grid-cols-3 gap-1.5">
+        <div className="h-6 rounded-md border bg-card" />
+        <div className="h-6 rounded-md bg-foreground" />
+        <div className="h-6 rounded-md border border-warning bg-warning/10" />
+      </div>
+      <div className="h-1.5 w-2/3 rounded-full bg-muted-foreground/40" />
+    </div>
+  )
+}
+
+function AppearanceSettings() {
+  const theme = useTheme()
+  return (
+    <Section title="Appearance" description="Saved on this device only, so a kitchen screen can stay dark while the till stays light.">
+      <div role="radiogroup" aria-label="Colour mode" className="grid gap-3 sm:grid-cols-3">
+        {THEMES.map(({ value, label, hint, icon: Icon }) => (
+          <label
+            key={value}
+            className={cn(
+              'group grid cursor-pointer overflow-hidden rounded-xl border transition-colors hover:border-foreground/40',
+              'has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50',
+              theme === value && 'border-foreground ring-1 ring-foreground hover:border-foreground',
+            )}
+          >
+            <input
+              type="radio"
+              name="theme"
+              value={value}
+              checked={theme === value}
+              onChange={() => setTheme(value)}
+              aria-label={label}
+              className="sr-only"
+            />
+            <div className="h-20 border-b" aria-hidden>
+              {value === 'system' ? (
+                <div className="grid h-full grid-cols-2">
+                  <ThemePreview mode="light" />
+                  <ThemePreview mode="dark" />
+                </div>
+              ) : (
+                <ThemePreview mode={value} />
+              )}
+            </div>
+            <div className="flex items-center gap-2.5 px-3 py-2.5">
+              <Icon className="size-4 shrink-0 text-muted-foreground" />
+              <div className="grid min-w-0">
+                <span className="text-sm font-medium">{label}</span>
+                <span className="truncate text-xs text-muted-foreground">{hint}</span>
+              </div>
+              {theme === value && <CheckCircle2 className="ml-auto size-4 shrink-0" aria-hidden />}
+            </div>
+          </label>
+        ))}
+      </div>
+    </Section>
+  )
+}
 
 export function SettingsPage() {
   const { section } = useParams()
@@ -223,7 +300,7 @@ function RestaurantSettings() {
         <div className="sticky bottom-0 flex items-center justify-end gap-3 rounded-2xl border bg-background/95 px-4 py-3 shadow-sm">
           {done && !dirty && (
             <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              <CheckCircle2 className="size-4 text-emerald-600" /> Saved
+              <CheckCircle2 className="size-4 text-success" /> Saved
             </span>
           )}
           {save.error && !(save.error instanceof ApiError && save.error.status === 400) && (
@@ -263,14 +340,14 @@ function BillPreview({ r }: { r: Restaurant }) {
     r.fssai && `FSSAI Lic. No: ${r.fssai.replace(/\s/g, '')}`,
   ].filter(Boolean)
   return (
-    <div className="mx-auto w-full max-w-xs rounded-lg border bg-white p-4 text-center font-mono text-xs leading-relaxed text-neutral-900 shadow-sm">
+    <div className="mx-auto w-full max-w-xs rounded-lg border bg-paper p-4 text-center font-mono text-xs leading-relaxed text-paper-foreground shadow-sm">
       <div className="text-sm font-bold">{r.name || 'Restaurant'}</div>
       {lines.map((l, i) => (
         <div key={i}>{l}</div>
       ))}
-      <div className="my-2 border-t border-dashed border-neutral-400" />
-      <div className="text-neutral-400">… items and totals …</div>
-      <div className="my-2 border-t border-dashed border-neutral-400" />
+      <div className="my-2 border-t border-dashed border-paper-muted" />
+      <div className="text-paper-muted">… items and totals …</div>
+      <div className="my-2 border-t border-dashed border-paper-muted" />
       {r.bill_footer && <div>{r.bill_footer}</div>}
     </div>
   )
@@ -383,7 +460,7 @@ function CookingInstructionsSettings() {
       <div className="sticky bottom-0 flex items-center justify-end gap-3 rounded-2xl border bg-background/95 px-4 py-3 shadow-sm">
         {done && !dirty && (
           <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <CheckCircle2 className="size-4 text-emerald-600" /> Saved
+            <CheckCircle2 className="size-4 text-success" /> Saved
           </span>
         )}
         {save.error && !(save.error instanceof ApiError && save.error.status === 400) && (
@@ -542,7 +619,7 @@ function PrintingSettings() {
       <div className="sticky bottom-0 flex items-center justify-end gap-3 rounded-2xl border bg-background/95 px-4 py-3 shadow-sm">
         {done && !dirty && (
           <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <CheckCircle2 className="size-4 text-emerald-600" /> Saved
+            <CheckCircle2 className="size-4 text-success" /> Saved
           </span>
         )}
         {save.error && !(save.error instanceof ApiError && save.error.status === 400) && (
@@ -715,8 +792,8 @@ function Status({ state: s }: { state: BackupState }) {
   return (
     <div className="grid gap-3">
       {workerDown && (
-        <div className="flex gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+        <div className="flex gap-3 rounded-xl border border-warning/50 bg-warning/10 p-3 text-sm text-foreground">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
           <div className="grid gap-1.5">
             <p className="font-medium">The backup worker isn't running, so nothing is being backed up.</p>
             <p>
@@ -739,7 +816,7 @@ function Status({ state: s }: { state: BackupState }) {
             {s.last_run_at ? (
               <>
                 {s.last_ok ? (
-                  <CheckCircle2 className="size-4 text-emerald-600" aria-label="Succeeded" />
+                  <CheckCircle2 className="size-4 text-success" aria-label="Succeeded" />
                 ) : (
                   <XCircle className="size-4 text-destructive" aria-label="Failed" />
                 )}

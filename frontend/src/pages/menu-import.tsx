@@ -69,7 +69,7 @@ export function MenuImport({ hasItems, onDone }: { hasItems: boolean; onDone: ()
       <div className="grid gap-5">
         <h2 className="pr-10 text-lg font-semibold tracking-tight">Menu imported</h2>
         <p className="flex items-start gap-2 text-sm">
-          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />
           {summary(result)}
         </p>
         <Button size="lg" onClick={onDone}>
@@ -170,7 +170,7 @@ export function MenuImport({ hasItems, onDone }: { hasItems: boolean; onDone: ()
           )}
 
           {result.errors.length === 0 && result.notes.length > 0 && (
-            <ul className="grid gap-1 rounded-lg bg-amber-500/10 p-3 text-sm">
+            <ul className="grid gap-1 rounded-lg bg-warning/10 p-3 text-sm">
               {result.notes.map((n) => (
                 <li key={n}>{n}</li>
               ))}
@@ -190,7 +190,7 @@ export function MenuImport({ hasItems, onDone }: { hasItems: boolean; onDone: ()
                   <span
                     className={cn(
                       'shrink-0 rounded-full px-2 py-0.5 text-xs',
-                      r.action === 'create' ? 'bg-emerald-500/10 text-emerald-700' : 'bg-muted',
+                      r.action === 'create' ? 'bg-success/10 text-success' : 'bg-muted',
                     )}
                   >
                     {r.action === 'create' ? 'New' : 'Update'}

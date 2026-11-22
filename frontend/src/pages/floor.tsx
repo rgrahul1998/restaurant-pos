@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils'
 const TONE: Record<Table['status'], string> = {
   free: 'bg-background hover:border-foreground/40',
   occupied: 'border-foreground bg-foreground text-background',
-  billed: 'border-amber-400 bg-amber-50 text-amber-950',
+  billed: 'border-warning bg-warning/10 text-foreground',
 }
 
 /** A table action that needs other tables picked on the floor before it can run. */

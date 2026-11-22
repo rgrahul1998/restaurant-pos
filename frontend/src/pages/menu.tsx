@@ -295,12 +295,12 @@ function ItemsTab(props: {
                     {/* Tags under the name, so long names keep the whole first line. */}
                     <p className="mt-1 flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground">
                       {item.is_special && (
-                        <span className="shrink-0 rounded-full bg-amber-100 px-2 py-px text-xs font-medium text-amber-900">
+                        <span className="shrink-0 rounded-full bg-warning/10 px-2 py-px text-xs font-medium text-warning">
                           Special
                         </span>
                       )}
                       {item.has_jain && (
-                        <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-px text-xs font-medium text-emerald-800">
+                        <span className="shrink-0 rounded-full bg-veg/10 px-2 py-px text-xs font-medium text-veg">
                           Jain
                         </span>
                       )}
@@ -333,10 +333,10 @@ function VegMark({ veg }: { veg: boolean }) {
       title={veg ? 'Vegetarian' : 'Non-vegetarian'}
       className={cn(
         'grid size-3.5 shrink-0 place-items-center rounded-[3px] border',
-        veg ? 'border-emerald-600' : 'border-red-700',
+        veg ? 'border-veg' : 'border-nonveg',
       )}
     >
-      <span className={cn('size-1.5 rounded-full', veg ? 'bg-emerald-600' : 'bg-red-700')} />
+      <span className={cn('size-1.5 rounded-full', veg ? 'bg-veg' : 'bg-nonveg')} />
     </span>
   )
 }

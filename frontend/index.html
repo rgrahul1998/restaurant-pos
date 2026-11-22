@@ -5,6 +5,16 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Restaurant POS</title>
+    <!-- Apply the saved light/dark choice before the first paint, so dark devices never flash white.
+         Mirrors src/lib/theme.ts (same key, default light). -->
+    <script>
+      try {
+        var t = localStorage.getItem('pos-theme') || 'light'
+        var dark = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)
+        if (dark) document.documentElement.classList.add('dark')
+        document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>
