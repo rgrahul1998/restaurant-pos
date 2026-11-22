@@ -291,7 +291,7 @@ function CartBar({ items, total, onView }: { items: OrderItem[]; total?: string;
             {count} {count === 1 ? 'item' : 'items'}
             {total !== undefined && <span className="tabular-nums"> · {money(total)}</span>}
           </p>
-          {unsent > 0 && <p className="text-xs text-amber-700">{unsent} not sent to the kitchen</p>}
+          {unsent > 0 && <p className="text-xs text-warning">{unsent} not sent to the kitchen</p>}
         </div>
         <Button size="lg" className="h-11" onClick={onView}>
           View cart
@@ -403,7 +403,7 @@ function MenuPicker(props: {
                       variant="outline"
                       disabled={props.busy}
                       onClick={() => props.onAdd(m, true)}
-                      className="border-emerald-300 text-emerald-800 hover:bg-emerald-50 hover:text-emerald-900"
+                      className="border-veg/50 text-veg hover:bg-veg/10 hover:text-veg"
                     >
                       Jain
                     </Button>
@@ -481,7 +481,7 @@ function Lines(props: {
                   money(item.line_total)
                 )}
                 {unsent !== 0 && (
-                  <span className={unsent > 0 ? 'text-amber-600' : 'text-destructive'}>
+                  <span className={unsent > 0 ? 'text-warning' : 'text-destructive'}>
                     {' · '}
                     {unsent > 0 ? `${unsent} not sent` : `cancel ${-unsent}, not sent`}
                   </span>
@@ -527,7 +527,7 @@ function Lines(props: {
               />
             ) : (
               item.note && (
-                <p className="col-span-2 mt-1 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-500">
+                <p className="col-span-2 mt-1 flex items-start gap-1.5 text-xs text-warning">
                   <MessageSquareText className="mt-px size-3.5 shrink-0" />
                   {item.note}
                 </p>
@@ -628,8 +628,8 @@ function ItemNote(props: { note: string; busy: boolean; onSave: (note: string) =
         className={cn(
           'col-span-2 mt-1 flex items-start gap-1.5 text-left text-xs',
           props.note
-            ? 'text-amber-700 dark:text-amber-500'
-            : 'text-muted-foreground/70 hover:text-foreground',
+            ? 'text-warning'
+            : 'text-muted-foreground hover:text-foreground',
         )}
       >
         <MessageSquareText className="mt-px size-3.5 shrink-0" />
@@ -779,7 +779,7 @@ function OpenActions(props: {
         props.mayBill &&
         hasItems && (
           <div className="flex gap-2">
-            <div className="flex h-11 w-40 items-center rounded-lg border bg-background pr-1 focus-within:border-ring">
+            <div className="flex h-11 w-40 items-center rounded-lg border border-input bg-background pr-1 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
               <input
                 value={discount}
                 onChange={(e) => setDiscount(e.target.value)}

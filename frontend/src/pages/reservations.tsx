@@ -62,7 +62,7 @@ const OCCASIONS: { value: Occasion; label: string }[] = [
 
 const STATUS: Record<Reservation['status'], { label: string; tone: string }> = {
   confirmed: { label: 'Confirmed', tone: 'bg-foreground text-background border-foreground' },
-  seated: { label: 'Seated', tone: 'bg-emerald-50 text-emerald-900 border-emerald-300' },
+  seated: { label: 'Seated', tone: 'bg-success/10 text-success border-success/50' },
   cancelled: { label: 'Cancelled', tone: 'bg-muted text-muted-foreground border-border line-through' },
   no_show: { label: 'No-show', tone: 'bg-muted text-muted-foreground border-border line-through' },
 }
@@ -322,7 +322,7 @@ function DayView(props: {
                       />
                     ))}
                     {showNow && (
-                      <span className="absolute inset-y-0 z-[1] w-px bg-red-500" style={{ left: pct(now) }} />
+                      <span className="absolute inset-y-0 z-[1] w-px bg-destructive" style={{ left: pct(now) }} />
                     )}
                     {live
                       .filter((b) => b.tables.includes(table.id))
@@ -418,7 +418,7 @@ function MonthView(props: {
                   className={cn(
                     'grid size-6 place-items-center rounded-full text-xs tabular-nums',
                     outside && 'text-muted-foreground',
-                    key === today && 'bg-red-600 font-semibold text-white',
+                    key === today && 'bg-primary font-semibold text-primary-foreground',
                   )}
                 >
                   {d.getDate()}
@@ -650,7 +650,7 @@ function BookingForm(props: {
             <span
               className={cn(
                 'text-xs',
-                Number(form.guests) > seats ? 'text-amber-700' : 'text-muted-foreground',
+                Number(form.guests) > seats ? 'text-warning' : 'text-muted-foreground',
               )}
             >
               {seats} seats{Number(form.guests) > seats && ` for ${form.guests} guests`}

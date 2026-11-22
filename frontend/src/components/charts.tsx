@@ -71,7 +71,7 @@ export function ColumnChart(props: {
                 tabIndex={0}
                 aria-label={`${c.title}: ${props.format(c.value)}`}
                 className={cn(
-                  'flex h-full min-w-0 flex-1 items-end justify-center rounded-sm outline-none',
+                  'flex h-full min-w-0 flex-1 items-end justify-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   active === i && 'bg-muted/70',
                 )}
               >

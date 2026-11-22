@@ -58,7 +58,7 @@ export function OrdersPage({ title, statuses, empty, allowNew }: Props) {
                   to={`/orders/${order.id}`}
                   className={cn(
                     'flex h-full flex-col gap-4 rounded-2xl border bg-background p-5 transition-colors hover:border-foreground/30',
-                    billed && 'border-amber-300 bg-amber-50/60 dark:bg-amber-950/20',
+                    billed && 'border-warning/50 bg-warning/5',
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -73,7 +73,7 @@ export function OrdersPage({ title, statuses, empty, allowNew }: Props) {
                     <span
                       className={cn(
                         'shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium first-letter:uppercase',
-                        billed ? 'bg-amber-100 text-amber-900' : 'bg-muted text-muted-foreground',
+                        billed ? 'bg-warning/10 text-warning' : 'bg-muted text-muted-foreground',
                       )}
                     >
                       {billed ? 'Awaiting payment' : order.status}

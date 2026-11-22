@@ -165,7 +165,7 @@ function RestoreForm() {
     return (
       <div className="grid gap-4">
         <p className="flex items-start gap-2 text-sm">
-          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />
           Restored {done.rows.toLocaleString('en-IN')} records and {done.media_files} photos. Sign in
           with your usual username and password.
         </p>

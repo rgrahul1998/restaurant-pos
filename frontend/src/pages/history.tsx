@@ -28,8 +28,8 @@ const TYPES = [
 ] as const
 
 const STATUS_TONE: Record<Order['status'], string> = {
-  open: 'bg-sky-50 text-sky-900',
-  billed: 'bg-amber-100 text-amber-900',
+  open: 'bg-info/10 text-info',
+  billed: 'bg-warning/10 text-warning',
   paid: 'bg-muted text-muted-foreground',
   cancelled: 'bg-destructive/10 text-destructive',
 }

@@ -271,9 +271,9 @@ export function PrinterPage() {
     }
   }
 
-  const tone = { ok: 'bg-emerald-500', bad: 'bg-destructive', warn: 'bg-amber-500' }[status.state]
+  const tone = { ok: 'bg-success', bad: 'bg-destructive', warn: 'bg-warning' }[status.state]
   const select =
-    'h-11 w-full rounded-xl border bg-background px-3 text-sm outline-none focus:border-ring disabled:opacity-50'
+    'h-11 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50'
 
   const printerField = (label: string, key: 'kotPrinter' | 'billPrinter') => (
     <div className="grid gap-2">

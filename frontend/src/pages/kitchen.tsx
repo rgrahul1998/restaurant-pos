@@ -111,7 +111,7 @@ export function KitchenPage() {
                   <span className="mr-2 font-semibold tabular-nums">{item.quantity}</span>
                   {item.name}
                   {item.is_jain && <JainTag />}
-                  {item.note && <p className="text-xs text-amber-700 no-underline">{item.note}</p>}
+                  {item.note && <p className="text-xs text-warning no-underline">{item.note}</p>}
                 </li>
               ))}
             </ul>
